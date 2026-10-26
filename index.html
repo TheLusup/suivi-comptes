@@ -1,0 +1,2211 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#030b17">
+  <title>Suivi Comptes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+/* Thème « néobanque » : sombre bleu nuit par défaut, clair en option (bouton ◐) */
+:root {
+  color-scheme: dark;
+  --page: #030b17;
+  --page-glow: radial-gradient(1200px 700px at 8% -10%, rgba(38, 92, 170, .55), transparent 60%), radial-gradient(900px 600px at 100% 0%, rgba(20, 60, 120, .25), transparent 60%);
+  --sidebar: rgba(4, 14, 30, .72);
+  --surface: #161d27;
+  --surface-2: #222b37;
+  --surface-3: #2c3643;
+  --border: rgba(255, 255, 255, .07);
+  --text: #f5f7fa;
+  --text-2: #b6c0cd;
+  --muted: #7d8898;
+  --grid: rgba(255, 255, 255, .06);
+  --axis: rgba(255, 255, 255, .14);
+  --series-1: #24c99a; --series-2: #ff7a45; --series-3: #5b8cff; --series-4: #f5b83d;
+  --series-5: #e86fa8; --series-6: #9b7bff; --series-7: #35c3e8; --series-8: #ff5c64;
+  --div-pos: #24c99a;
+  --div-neg: #ff5c64;
+  --good: #24c99a; --warning: #f5b83d; --critical: #ff5c64;
+  --good-text: #2fd6a4; --critical-text: #ff6b72; --warning-text: #f5b83d;
+  --critical-soft: rgba(255, 92, 100, .14);
+  --accent: #4f6bff;
+  --accent-soft: rgba(79, 107, 255, .18);
+  --radius: 22px;
+  --radius-sm: 14px;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #f2f4f8;
+  --page-glow: radial-gradient(1200px 600px at 8% -10%, rgba(79, 107, 255, .12), transparent 60%);
+  --sidebar: rgba(255, 255, 255, .78);
+  --surface: #ffffff;
+  --surface-2: #f0f2f6;
+  --surface-3: #e5e8ee;
+  --border: rgba(10, 20, 40, .07);
+  --text: #0a1120;
+  --text-2: #4a5568;
+  --muted: #8a94a6;
+  --grid: rgba(10, 20, 40, .06);
+  --axis: rgba(10, 20, 40, .14);
+  --series-1: #12a982; --series-2: #f0662f; --series-3: #4069f5; --series-4: #d99a12;
+  --series-5: #d6528f; --series-6: #7a5af0; --series-7: #1aa6cc; --series-8: #e5484f;
+  --div-pos: #12a982; --div-neg: #e5484f;
+  --good: #12a982; --warning: #d99a12; --critical: #e5484f;
+  --good-text: #0b8a68; --critical-text: #cf3a41; --warning-text: #a26f00;
+  --critical-soft: rgba(229, 72, 79, .09);
+  --accent: #3d5afe;
+  --accent-soft: rgba(61, 90, 254, .10);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page-glow), var(--page); background-attachment: fixed; color: var(--text);
+  font: 14px/1.45 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-feature-settings: "tnum" 1, "cv11" 1;
+  -webkit-font-smoothing: antialiased; min-height: 100vh;
+}
+a { color: var(--accent); }
+h1 { font-size: 34px; font-weight: 800; margin: 0; letter-spacing: -.025em; }
+h2 { font-size: 15px; font-weight: 600; margin: 0; color: var(--text-2); }
+code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-size: 12px; }
+
+/* Barre latérale (barre d'onglets en bas d'écran sur mobile) */
+.sidebar {
+  position: fixed; inset: 0 auto 0 0; width: 104px; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 20px 8px;
+  background: var(--sidebar); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border-right: 1px solid var(--border);
+}
+.brand {
+  width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center;
+  background: var(--text); color: var(--page); font-weight: 800; font-size: 18px; letter-spacing: -.04em; text-decoration: none;
+}
+.tabs { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.tabs a {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 4px; border-radius: 16px;
+  color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 12px; text-align: center; line-height: 1.2;
+}
+.tabs svg { width: 46px; height: 40px; padding: 9px 12px; border-radius: 14px; fill: currentColor; transition: background .15s; }
+.tabs svg .cut { fill: none; stroke: var(--sidebar); stroke-width: 2.2; }
+.tabs a:hover { color: var(--text); }
+.tabs a:hover svg { background: var(--surface-2); }
+.tabs a[aria-current="page"] { color: var(--text); }
+.tabs a[aria-current="page"] svg { background: var(--surface-3); }
+.tools { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.tool-btns { display: flex; gap: 6px; }
+.pill { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+.pill.demo { box-shadow: inset 0 0 0 1px var(--warning); }
+.pill.github { box-shadow: inset 0 0 0 1px var(--good); }
+.icon-btn {
+  width: 36px; height: 36px; border-radius: 999px; border: 0; background: var(--surface-2);
+  color: var(--text-2); font-size: 16px; cursor: pointer;
+}
+.icon-btn:hover { background: var(--surface-3); color: var(--text); }
+
+/* Mise en page */
+main { max-width: 1320px; margin: 0 auto; padding: 28px 32px 48px 136px; }
+.page-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
+.page-h p { margin: 0; flex-basis: 100%; color: var(--muted); }
+/* Sous-onglets (Dépenses : une banque ou tous les comptes) */
+.onglets { display: flex; gap: 8px; flex-wrap: wrap; margin: -6px 0 18px; }
+.onglet {
+  border: 0; border-radius: 999px; padding: 8px 16px; background: var(--surface-2); color: var(--text-2);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.onglet:hover { background: var(--surface-3); color: var(--text); }
+.onglet[aria-pressed="true"] { background: var(--text); color: var(--page); }
+.note-interne { margin: 12px 0 0; }
+tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
+/* Points d'attention (vue d'ensemble) */
+.attentions { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.attention { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: var(--surface-2); border-radius: var(--radius-sm); }
+.attention .status { flex: none; margin-top: 1px; }
+.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; }
+.span-4 { grid-column: span 4; } .span-5 { grid-column: span 5; } .span-6 { grid-column: span 6; }
+.span-7 { grid-column: span 7; } .span-8 { grid-column: span 8; } .span-12 { grid-column: span 12; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; min-width: 0; }
+.card-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+.card-h h2::after { content: " ›"; color: var(--muted); font-weight: 500; }
+.card-sub { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.center { text-align: center; }
+.pad { padding: 32px 0; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pos { color: var(--good-text); }
+.neg { color: var(--critical-text); }
+.row-between { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.link { font-weight: 600; text-decoration: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* Chiffres clés */
+.hero { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 28px; align-items: center;
+  background: linear-gradient(135deg, rgba(79, 107, 255, .22), transparent 55%), var(--surface); }
+.hero .kpi-label { font-size: 14px; }
+.hero-value { font-size: 48px; font-weight: 800; letter-spacing: -.035em; line-height: 1.05; margin: 6px 0 12px; }
+.hero-deltas { display: grid; gap: 5px; font-size: 13px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.kpi { background: var(--surface-2); border-radius: var(--radius-sm); padding: 14px 16px; min-width: 0; }
+.kpi-label { font-size: 13px; color: var(--text-2); font-weight: 500; }
+.kpi-value { font-size: 26px; font-weight: 800; margin: 3px 0; letter-spacing: -.025em; }
+.kpi-sub { font-size: 12px; color: var(--muted); }
+.delta { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.delta.up { color: var(--good-text); }
+.delta.down { color: var(--critical-text); }
+.delta.flat { color: var(--text-2); }
+
+/* Mobile : barre d'onglets en bas */
+@media (max-width: 760px) {
+  .sidebar {
+    inset: auto 0 0 0; width: auto; height: auto; flex-direction: row; justify-content: space-around; gap: 0;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--border);
+  }
+  .brand, .tools .pill { display: none; }
+  .tabs { flex-direction: row; justify-content: space-around; gap: 0; flex: 1; }
+  .tabs a { flex: 1; font-size: 10px; gap: 2px; padding: 2px; }
+  .tabs a span { white-space: nowrap; }
+  .tabs svg { width: 40px; height: 32px; padding: 6px 10px; }
+  .tools { margin: 0; }
+  .tool-btns { flex-direction: column; gap: 4px; }
+  .icon-btn { width: 30px; height: 30px; font-size: 14px; }
+  main { padding: 18px 16px 96px; }
+  h1 { font-size: 28px; }
+  .hero-value { font-size: 38px; }
+  .kpis { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi { padding: 12px; }
+  .kpi-value { font-size: 21px; overflow-wrap: anywhere; }
+  .kpi-value .delta { white-space: normal; }
+}
+
+/* Statuts : toujours icône + libellé */
+.status { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.status.good { color: var(--good-text); }
+.status.warning { color: var(--warning-text); }
+.status.critical { color: var(--critical-text); }
+.status.neutral { color: var(--text-2); }
+.tag { font-size: 11px; color: var(--text-2); background: var(--surface-2); border-radius: 999px; padding: 1px 8px; font-weight: 500; }
+
+/* Barres de progression */
+.track { position: relative; height: 8px; border-radius: 999px; background: var(--surface-2); overflow: visible; }
+.track.big { height: 14px; margin: 10px 0 8px; }
+.fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #7d93ff); }
+.fill.over { background: var(--critical); }
+.fill.hb { background: var(--muted); }
+.pace { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); border-radius: 1px; opacity: .55; }
+.pace-key { display: inline-block; width: 2px; height: 12px; background: var(--text); opacity: .55; vertical-align: middle; margin-right: 4px; }
+.legend-note { margin: 12px 0 0; }
+
+.cats { display: grid; gap: 4px; }
+.cat-row { display: grid; grid-template-columns: minmax(110px, 1.1fr) 2fr auto 92px; gap: 14px; align-items: center; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+.cat-row:last-child { border-bottom: 0; }
+.cat-name { font-weight: 500; min-width: 0; }
+.cat-val { font-size: 13px; }
+.cat-clic { cursor: pointer; border-radius: var(--radius-sm); }
+.cat-clic:hover { background: var(--surface-2); }
+.cat-clic:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cat-clic .chevron { display: inline-block; color: var(--text-2); transition: transform .15s; font-size: 11px; }
+.cat-clic.ouvert .chevron { transform: rotate(90deg); }
+/* P&L mensuel */
+.pnl-wrap { margin: 0; }
+table.pnl { font-size: 13px; font-variant-numeric: tabular-nums; }
+table.pnl th, table.pnl td { padding: 5px 8px; white-space: nowrap; vertical-align: middle; }
+table.pnl th[scope="row"], table.pnl thead th:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1; text-align: left; font-weight: 500; min-width: 190px; }
+table.pnl thead th.pnl-sel { color: var(--text); font-weight: 650; }
+.pnl-section th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding-top: 14px !important; border-bottom: 1px solid var(--axis); background: var(--surface); }
+.pnl-g th[scope="row"] { font-weight: 600; }
+.pnl-c th[scope="row"] { padding-left: 26px; color: var(--text-2); font-weight: 400; }
+.pnl-c td { color: var(--text-2); }
+.pnl-groupe { cursor: pointer; }
+.pnl-groupe:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pnl .chevron { display: inline-block; font-size: 10px; color: var(--text-2); transition: transform .15s; }
+.pnl .chevron.ouvert { transform: rotate(90deg); }
+.pnl-total th, .pnl-total td { font-weight: 650; border-top: 1px solid var(--axis); }
+.pnl-resultat th, .pnl-resultat td { font-weight: 700; background: var(--surface-2); }
+.pnl-resultat th[scope="row"] { background: var(--surface-2); }
+.pnl-taux th, .pnl-taux td { color: var(--text-2); font-style: italic; }
+.pnl-neg { color: var(--text-2); }
+.pnl-clic { cursor: pointer; }
+.pnl-clic:hover { background: var(--surface-2); text-decoration: underline; }
+.cats-titre { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 18px 0 4px; }
+.cat-detail { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 12px; margin: 4px 0 10px; }
+.cat-detail tbody tr:hover { background: var(--surface); }
+table.ops-cat td { padding: 5px 6px; font-size: 13px; vertical-align: middle; }
+.small-select select { min-width: 0; width: 100%; max-width: 210px; padding: 5px 10px; font-size: 13px; }
+.kpis-2 { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.corr-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 14px; font-size: 13px; color: var(--text-2); }
+.corr-bar .check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.corr-status { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.btn.small { padding: 6px 14px; font-size: 13px; }
+.budget-sum { margin-bottom: 14px; }
+.facts { display: grid; gap: 8px; margin: 0 0 12px; }
+.facts div { display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.facts dt { color: var(--text-2); }
+.facts dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.alloc { display: grid; gap: 14px; }
+.alloc .track { margin-top: 6px; }
+
+/* Tableaux */
+.table-wrap { overflow-x: auto; margin: 0 -4px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+thead th { font-size: 12px; color: var(--muted); font-weight: 500; }
+tfoot td, tfoot th { font-weight: 650; border-bottom: 0; }
+tbody tr:hover { background: rgba(127, 140, 160, .07); }
+.hist th[scope="row"] { font-weight: 500; }
+.over-cell { background: var(--critical-soft); }
+.over-cell .ico { color: var(--critical-text); font-size: 10px; }
+.stale { color: var(--warning-text); }
+.nowrap { white-space: nowrap; }
+tr.ligne-clic { cursor: pointer; }
+tr.ligne-clic:focus-visible { outline: 2px solid var(--accent, currentColor); outline-offset: -2px; }
+tr.ligne-clic .chevron { display: inline-block; color: var(--text-2, inherit); transition: transform .15s; }
+tr.ligne-clic.ouvert .chevron { transform: rotate(90deg); }
+tr.ligne-detail > td { background: var(--surface-2); padding: 10px 12px 14px; }
+tr.ligne-detail:hover { background: none; }
+table.ops { width: auto; min-width: 60%; }
+table.ops th, table.ops td { padding: 5px 10px; font-size: .9em; }
+.heat-table th, .heat-table td { padding: 7px 6px; }
+.heat-table td.heat { border-left: 2px solid var(--surface); }
+.heat-table th[scope="row"] { font-weight: 500; white-space: nowrap; }
+.strong-cell { font-weight: 650; border-left: 1px solid var(--border); }
+
+.chart { position: relative; width: 100%; }
+
+/* Formulaire */
+.form { display: grid; gap: 14px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form label { display: grid; gap: 4px; font-size: 13px; color: var(--text-2); font-weight: 500; }
+.form label.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
+input:not([type="checkbox"]), select {
+  font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid transparent;
+  border-radius: 12px; padding: 9px 12px; width: 100%;
+}
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.select select { width: auto; min-width: 200px; border-radius: 999px; padding: 10px 16px; font-weight: 600; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  font: inherit; font-weight: 600; padding: 10px 18px; border-radius: 999px; cursor: pointer; text-decoration: none; display: inline-block;
+  border: 0; background: var(--surface-2); color: var(--text);
+}
+.btn:hover { background: var(--surface-3); }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; color: var(--text-2); }
+.steps { padding-left: 18px; margin: 0 0 12px; display: grid; gap: 8px; }
+.alert { border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 14px; font-size: 13px; background: var(--surface-2); border-left: 3px solid var(--muted); }
+.alert ul { margin: 6px 0 0; padding-left: 18px; }
+.alert.good { border-left-color: var(--good); }
+.alert.warning { border-left-color: var(--warning); }
+.alert.critical { border-left-color: var(--critical); }
+.empty-state { max-width: 480px; margin: 60px auto; text-align: center; display: grid; gap: 10px; justify-items: center; }
+
+/* Mobile */
+@media (max-width: 900px) {
+  .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
+  .hero { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+
+
+
+  .card { padding: 16px; border-radius: 18px; }
+  .hero-value { font-size: 34px; }
+  .form-row { grid-template-columns: 1fr; }
+  .cat-row { grid-template-columns: 1fr auto; gap: 4px 10px; }
+  .cat-bar { grid-column: 1 / -1; grid-row: 2; }
+  .cat-status { text-align: right; }
+  .cat-val { grid-column: 1; grid-row: 3; }
+}
+
+</style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#overview" title="Suivi Comptes" aria-label="Suivi Comptes, vue d'ensemble">SC</a>
+    <nav class="tabs" aria-label="Pages">
+      <a href="#overview" data-route="overview">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5.5v-6h-5v6H4a1 1 0 0 1-1-1z"/></svg>
+        <span>Vue d'ensemble</span>
+      </a>
+      <a href="#depenses" data-route="depenses">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M2.5 9.5h19" class="cut"/></svg>
+        <span>Dépenses</span>
+      </a>
+      <a href="#epargne" data-route="epargne">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="4" height="9" rx="1.5"/><rect x="10" y="4" width="4" height="16" rx="1.5"/><rect x="16" y="8" width="4" height="12" rx="1.5"/></svg>
+        <span>Épargne</span>
+      </a>
+      <a href="#immobilier" data-route="immobilier">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V8.5L11 4v17zM13 21V9h7v12zM6.5 10h2v2h-2zm0 4h2v2h-2zm9-2h2v2h-2zm0 4h2v2h-2z"/></svg>
+        <span>Immobilier</span>
+      </a>
+      <a href="#parametres" data-route="parametres">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 20 6v5.5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z"/></svg>
+        <span>Paramètres</span>
+      </a>
+    </nav>
+    <div class="tools">
+      <span id="source-pill" class="pill"></span>
+      <div class="tool-btns">
+        <button id="btn-refresh" class="icon-btn" type="button" title="Recharger les données" aria-label="Recharger les données">↻</button>
+        <button id="btn-theme" class="icon-btn" type="button" title="Basculer clair / sombre" aria-label="Basculer clair / sombre">◐</button>
+      </div>
+    </div>
+  </aside>
+  <main id="view"></main>
+  <script>
+'use strict';
+
+/* ---------- Formatage ---------- */
+const FMT = {
+  eur0: new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }),
+  eur2: new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+  eurK: new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1 }),
+  pct1: new Intl.NumberFormat('fr-FR', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+};
+const eur = (v, dec) => (dec ? FMT.eur2 : FMT.eur0).format(v || 0);
+const eurShort = v => Math.abs(v) >= 1000 ? FMT.eurK.format(v) : FMT.eur0.format(v);
+const eurSigned = (v, dec) => (v > 0 ? '+' : '') + eur(v, dec);
+const pct = v => (v == null || !isFinite(v)) ? '—' : FMT.pct1.format(v);
+const pctSigned = v => (v == null || !isFinite(v)) ? '—' : (v > 0 ? '+' : '') + FMT.pct1.format(v);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const normKey = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+/* ---------- Dates (chaînes AAAA-MM-JJ, mois AAAA-MM) ---------- */
+const pad = n => String(n).padStart(2, '0');
+const D = {
+  iso: d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()),
+  today: () => D.iso(new Date()),
+  monthKey: s => s.slice(0, 7),
+  addMonths(mk, n) {
+    let [y, m] = mk.split('-').map(Number);
+    m += n;
+    y += Math.floor((m - 1) / 12);
+    m = ((m - 1) % 12 + 12) % 12 + 1;
+    return y + '-' + pad(m);
+  },
+  daysInMonth(mk) { const [y, m] = mk.split('-').map(Number); return new Date(y, m, 0).getDate(); },
+  endOfMonth: mk => mk + '-' + pad(D.daysInMonth(mk)),
+  range(from, to) { const out = []; for (let m = from; m <= to; m = D.addMonths(m, 1)) out.push(m); return out; },
+  monthLabel(mk, long) {
+    const [y, m] = mk.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('fr-FR', long ? { month: 'long', year: 'numeric' } : { month: 'short', year: '2-digit' });
+  },
+  fmt: s => s ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : '—',
+  diffDays: (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000),
+};
+
+/* ---------- Lecture CSV / nombres / dates ---------- */
+function parseCSV(text) {
+  const lines = String(text).replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim() !== '');
+  if (!lines.length) return [];
+  const sep = lines[0].split(';').length >= lines[0].split(',').length ? ';' : ',';
+  const split = line => {
+    const out = []; let cur = '', q = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (q) {
+        if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += c;
+      } else if (c === '"') q = true;
+      else if (c === sep) { out.push(cur); cur = ''; }
+      else cur += c;
+    }
+    out.push(cur);
+    return out.map(s => s.trim());
+  };
+  const head = split(lines[0]).map(normKey);
+  return lines.slice(1).map(l => {
+    const cells = split(l), o = {};
+    head.forEach((h, i) => { o[h] = cells[i] ?? ''; });
+    return o;
+  });
+}
+
+function parseNum(s) {
+  if (s == null) return null;
+  if (typeof s === 'number') return isFinite(s) ? s : null;
+  s = String(s).replace(/[\s  €]/g, '');
+  if (s === '') return null;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  return isFinite(n) ? n : null;
+}
+
+function parseDate(s) {
+  s = String(s ?? '').trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+  return null;
+}
+
+/* ---------- Accès GitHub ---------- */
+const FICHIERS = { comptes: 'comptes.json', soldes: 'soldes.csv', transactions: 'transactions.csv', budget: 'budget.json' };
+
+async function ghFetch(cfg, file) {
+  const path = [cfg.dossier, file].filter(Boolean).join('/').replace(/^\/+|\/+$/g, '').split('/').map(encodeURIComponent).join('/');
+  const url = `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${path}?ref=${encodeURIComponent(cfg.branche || 'main')}`;
+  const headers = { Accept: 'application/vnd.github.raw+json' };
+  if (cfg.token) headers.Authorization = 'Bearer ' + cfg.token;
+  let r;
+  try { r = await fetch(url, { headers, cache: 'no-store' }); }
+  catch (e) { throw new Error(`Impossible de joindre GitHub (${file}). Vérifiez votre connexion.`); }
+  if (!r.ok) {
+    const why = {
+      401: 'token invalide ou expiré',
+      403: 'accès refusé (droits du token insuffisants ou limite d’appels atteinte)',
+      404: 'fichier introuvable, ou dépôt non accessible avec ce token',
+    }[r.status] || `erreur HTTP ${r.status}`;
+    throw new Error(`${file} : ${why}.`);
+  }
+  return r.text();
+}
+
+// Écrit un fichier du dépôt (nécessite un token avec Contents : Read and write).
+async function ghPut(cfg, file, text, message) {
+  const path = [cfg.dossier, file].filter(Boolean).join('/').replace(/^\/+|\/+$/g, '').split('/').map(encodeURIComponent).join('/');
+  const url = `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${path}`;
+  const headers = { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + cfg.token };
+  const branche = cfg.branche || 'main';
+  let sha;
+  const g = await fetch(`${url}?ref=${encodeURIComponent(branche)}`, { headers, cache: 'no-store' });
+  if (g.ok) sha = (await g.json()).sha;
+  const bytes = new TextEncoder().encode(text);
+  const content = btoa(Array.from(bytes, b => String.fromCharCode(b)).join(''));
+  const r = await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ message, content, branch: branche, ...(sha ? { sha } : {}) }) });
+  if (!r.ok) {
+    throw new Error(r.status === 403 || r.status === 404
+      ? 'votre token n’a que le droit de lecture (il faut « Contents : Read and write » pour enregistrer)'
+      : `erreur HTTP ${r.status}`);
+  }
+}
+
+async function loadFromGitHub(cfg) {
+  const [c, s, t, b] = await Promise.all(Object.values(FICHIERS).map(f => ghFetch(cfg, f)));
+  // positions.csv est facultatif (détail des lignes d'un PEA / compte-titres)
+  let p = '', erreurPositions = null;
+  try { p = await ghFetch(cfg, 'positions.csv'); }
+  catch (e) { if (!/introuvable/.test(e.message)) erreurPositions = e.message; }
+  // operations.csv est facultatif (achats, ventes, dividendes par ligne)
+  let o = '';
+  try { o = await ghFetch(cfg, 'operations.csv'); }
+  catch (e) { if (!/introuvable/.test(e.message)) erreurPositions = erreurPositions || e.message; }
+  // categories.json est facultatif (corrections de catégories faites dans la page Dépenses)
+  let corrections = null;
+  try { corrections = JSON.parse(await ghFetch(cfg, 'categories.json')); } catch (e) { corrections = null; }
+  // immobilier.json est facultatif (biens immobiliers et leurs prêts)
+  let immobilier = null;
+  try { immobilier = JSON.parse(await ghFetch(cfg, 'immobilier.json')); }
+  catch (e) { if (!/introuvable/.test(e.message)) erreurPositions = erreurPositions || 'immobilier.json : ' + e.message; }
+  let comptes, budget;
+  try { comptes = JSON.parse(c); } catch (e) { throw new Error('comptes.json : JSON invalide (' + e.message + ').'); }
+  try { budget = JSON.parse(b); } catch (e) { throw new Error('budget.json : JSON invalide (' + e.message + ').'); }
+  const M = buildModel({ comptes, soldes: parseCSV(s), transactions: parseCSV(t), budget, positions: parseCSV(p), operations: parseCSV(o), corrections, immobilier }, 'github');
+  if (erreurPositions) M.warnings.unshift('Données facultatives non chargées — ' + erreurPositions);
+  return M;
+}
+
+/* ---------- Modèle ---------- */
+const TYPES = {
+  'courant':       { label: 'Compte courant', classe: 'liquidites' },
+  'livret':        { label: 'Livret',         classe: 'epargne' },
+  'fonds-monetaire': { label: 'Fonds monétaire', classe: 'epargne' },
+  'pel':           { label: 'PEL / CEL',      classe: 'epargne' },
+  'assurance-vie': { label: 'Assurance vie',  classe: 'placements' },
+  'pea':           { label: 'PEA',            classe: 'placements' },
+  'cto':           { label: 'Compte-titres',  classe: 'placements' },
+  'per':           { label: 'PER',            classe: 'placements' },
+  'crypto':        { label: 'Crypto',         classe: 'placements' },
+  'credit':        { label: 'Crédit',         classe: 'dettes' },
+};
+const CLASSES = {
+  liquidites: 'Liquidités',
+  epargne:    'Épargne réglementée',
+  placements: 'Placements',
+  autre:      'Autres actifs',
+  immobilier: 'Immobilier',
+  dettes:     'Dettes',
+};
+const typeInfo = t => TYPES[t] || { label: t || 'Autre', classe: 'autre' };
+
+function buildModel(raw, source) {
+  const warnings = [];
+  const comptes = (Array.isArray(raw.comptes) ? raw.comptes : raw.comptes?.comptes || []).map(c => ({
+    id: String(c.id), nom: c.nom || String(c.id), banque: c.banque || '',
+    // onglet : regroupement dans la page Dépenses (par défaut, la banque)
+    onglet: c.onglet || c.banque || c.nom || String(c.id),
+    // quotePart : part de ce compte qui vous revient (compte joint : 0.5) dans le patrimoine et la vue consolidée
+    quotePart: parseNum(c.quotePart) ?? 1,
+    type: String(c.type || 'autre').toLowerCase(), taux: parseNum(c.taux),
+    // ferme : date de clôture ; le compte reste dans l'historique mais n'est plus listé ensuite
+    ferme: c.ferme ? parseDate(c.ferme) : null,
+  }));
+  const ids = new Set(comptes.map(c => c.id));
+
+  const soldes = [];
+  (raw.soldes || []).forEach((r, i) => {
+    const date = parseDate(r.date), solde = parseNum(r.solde), compte = String(r.compte ?? '').trim();
+    if (!date || solde == null || !compte) { warnings.push(`soldes.csv, ligne ${i + 2} ignorée (date, compte ou solde illisible).`); return; }
+    if (!ids.has(compte)) { warnings.push(`soldes.csv, ligne ${i + 2} : compte « ${compte} » absent de comptes.json.`); return; }
+    soldes.push({ date, compte, solde, versements: parseNum(r.versements) });
+  });
+  soldes.sort((a, b) => a.date.localeCompare(b.date));
+
+  const transactions = [];
+  (raw.transactions || []).forEach((r, i) => {
+    const date = parseDate(r.date), montant = parseNum(r.montant);
+    if (!date || montant == null) { warnings.push(`transactions.csv, ligne ${i + 2} ignorée (date ou montant illisible).`); return; }
+    const categorie = r.categorie || 'Non catégorisé', libelle = r.libelle || '';
+    transactions.push({ id: `${date}|${libelle}|${montant}`, date, montant, libelle, categorie, categorieOrigine: categorie, compte: r.compte || '' });
+  });
+  transactions.sort((a, b) => a.date.localeCompare(b.date));
+
+  const b = raw.budget || {};
+  const budget = {
+    mensuel: b.mensuel || {},
+    exceptions: b.exceptions || {},
+    exclues: (b.exclues || ['Épargne', 'Virement interne']).map(normKey),
+    pnl: b.pnl || null,
+  };
+
+  const positions = [];
+  (raw.positions || []).forEach((r, i) => {
+    const date = parseDate(r.date), quantite = parseNum(r.quantite), cours = parseNum(r.cours), compte = String(r.compte ?? '').trim();
+    if (!date || quantite == null || cours == null || !r.titre) { warnings.push(`positions.csv, ligne ${i + 2} ignorée (date, titre, quantité ou cours illisible).`); return; }
+    positions.push({ date, compte, titre: r.titre, ticker: r.ticker || '', quantite, cours, pru: parseNum(r.pru) });
+  });
+  positions.sort((a, b) => a.date.localeCompare(b.date));
+
+  // report = quantité déjà détenue au début de l'historique des opérations
+  const operations = [];
+  (raw.operations || []).forEach((r, i) => {
+    const date = parseDate(r.date), quantite = parseNum(r.quantite), operation = String(r.operation || '').trim().toLowerCase();
+    if (!date || !r.titre || !['achat', 'vente', 'dividende', 'attribution', 'report'].includes(operation)) { warnings.push(`operations.csv, ligne ${i + 2} ignorée (date, titre ou opération illisible).`); return; }
+    operations.push({ date, compte: String(r.compte ?? '').trim(), titre: r.titre, operation, quantite: quantite || 0, prix: parseNum(r.prix), montant: parseNum(r.montant) });
+  });
+  operations.sort((a, b) => a.date.localeCompare(b.date));
+
+  // Biens immobiliers : on garde ceux qui ont une date d'achat ; l'échéancier du prêt est calculé une fois
+  const immobilier = (raw.immobilier?.biens || []).filter(b => b && parseDate(b.dateAchat)).map(b => {
+    const bien = { ...b, dateAchat: parseDate(b.dateAchat),
+      estimations: (b.estimations || []).map(e => ({ ...e, date: parseDate(e.date), valeur: parseNum(e.valeur) }))
+        .filter(e => e.date && e.valeur != null).sort((x, y) => x.date.localeCompare(y.date)) };
+    bien.echeancier = b.pret ? Immo.echeancier(b.pret) : [];
+    return bien;
+  });
+
+  const M = { comptes, soldes, transactions, budget, positions, operations, immobilier, source, chargeLe: new Date(), warnings, parCompte: {}, parLigne: {} };
+  comptes.forEach(c => { M.parCompte[c.id] = []; });
+  soldes.forEach(s => M.parCompte[s.compte].push(s));
+  positions.forEach(p => { const k = p.compte + '|' + p.titre; (M.parLigne[k] = M.parLigne[k] || []).push(p); });
+  M.correctionsDepot = Corrections.nettoyer(raw.corrections);
+  Corrections.appliquer(M);
+  return M;
+}
+
+/* ---------- Corrections de catégories ----------
+   categories.json (dépôt) : { "libelles": { clé de libellé: catégorie }, "operations": { id: catégorie } }
+   Les corrections faites dans la page sont gardées dans ce navigateur tant qu'elles ne sont pas
+   enregistrées dans le dépôt. Priorité : opération > libellé > catégorie de transactions.csv. */
+const CORR_KEY = 'suivi-comptes.corrections';
+const Corrections = {
+  // Clé de libellé : sans chiffres ni ponctuation, pour regrouper « BOLT.EU/O/250110 » et « BOLT.EU/O/250128 »
+  cle: libelle => normKey(libelle).replace(/\d+/g, ' ').replace(/[^a-z&']+/g, ' ').replace(/\s+/g, ' ').trim(),
+  nettoyer: c => ({ libelles: { ...(c?.libelles || {}) }, operations: { ...(c?.operations || {}) } }),
+  locales() { try { return Corrections.nettoyer(JSON.parse(localStorage.getItem(CORR_KEY) || 'null')); } catch { return Corrections.nettoyer(null); } },
+  sauverLocales(c) { try { localStorage.setItem(CORR_KEY, JSON.stringify(c)); } catch { /* stockage indisponible */ } },
+  effacerLocales() { try { localStorage.removeItem(CORR_KEY); } catch { /* stockage indisponible */ } },
+  nbLocales() { const c = Corrections.locales(); return Object.keys(c.libelles).length + Object.keys(c.operations).length; },
+  fusion(M) {
+    const l = Corrections.locales(), d = M.correctionsDepot || Corrections.nettoyer(null);
+    return { libelles: { ...d.libelles, ...l.libelles }, operations: { ...d.operations, ...l.operations } };
+  },
+  appliquer(M) {
+    delete M._pnlPlan;   // le plan du P&L dépend des catégories en usage
+    const c = Corrections.fusion(M);
+    M.transactions.forEach(t => {
+      t.categorie = c.operations[t.id] || c.libelles[Corrections.cle(t.libelle)] || t.categorieOrigine;
+    });
+  },
+  // Change la catégorie d'une opération, ou de toutes celles qui ont le même libellé
+  changer(M, t, categorie, toutLeLibelle) {
+    const l = Corrections.locales(), d = M.correctionsDepot;
+    if (toutLeLibelle) {
+      const k = Corrections.cle(t.libelle);
+      l.libelles[k] = categorie;
+      // Les corrections d'opérations isolées de ce libellé sont remplacées par la règle
+      M.transactions.filter(x => Corrections.cle(x.libelle) === k).forEach(x => {
+        delete l.operations[x.id];
+        if (d.operations[x.id]) l.operations[x.id] = categorie;
+      });
+    } else {
+      l.operations[t.id] = categorie;
+    }
+    Corrections.sauverLocales(l);
+    Corrections.appliquer(M);
+  },
+  // Contenu de categories.json une fois les corrections locales fusionnées
+  texte(M) {
+    const c = Corrections.fusion(M), tri = o => Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
+    return JSON.stringify({ libelles: tri(c.libelles), operations: tri(c.operations) }, null, 2) + '\n';
+  },
+};
+
+/* ---------- Immobilier (immobilier.json) ---------- */
+const Immo = {
+  // Échéancier d'un prêt à taux fixe et mensualités constantes. Avec "capitalParEcheance" (tableau
+  // d'amortissement de la banque), il est repris tel quel ; sinon il est recalculé (intérêts arrondis au
+  // centime, écarts possibles de quelques centimes). Assurance : cotisation mensuelle par année et par assuré.
+  echeancier(p) {
+    const t = (parseNum(p.taux) || 0) / 100 / 12, mens = parseNum(p.mensualite), d0 = parseDate(p.premiereEcheance);
+    const banque = (p.capitalParEcheance || []).map(parseNum), n = banque.length || parseNum(p.duree);
+    const assur = p.assurance?.mensuelleParAnnee || [], nb = p.assurance?.assures || 1, jour = Number(d0?.slice(8, 10));
+    let crd = parseNum(p.montant);
+    const out = [];
+    if (!d0 || !mens || !n || !crd) return out;
+    for (let k = 1; k <= n && crd > 0.005; k++) {
+      let capital = banque.length ? banque[k - 1] : Math.round((mens - Math.round(crd * t * 100) / 100) * 100) / 100;
+      if (k === n || capital > crd) capital = crd;
+      const interets = Math.round((mens - capital) * 100) / 100;
+      crd = Math.round((crd - capital) * 100) / 100;
+      const mk = D.addMonths(d0.slice(0, 7), k - 1);
+      out.push({ n: k, date: mk + '-' + pad(Math.min(jour, D.daysInMonth(mk))), interets, capital, crd,
+        assurance: Math.round((parseNum(assur[Math.floor((k - 1) / 12)]) || 0) * nb * 100) / 100 });
+    }
+    return out;
+  },
+  // Capital restant dû à une date (0 avant l'achat)
+  crd(b, date) {
+    if (!b.pret || date < b.dateAchat) return 0;
+    let r = parseNum(b.pret.montant) || 0;
+    for (const e of b.echeancier) { if (e.date <= date) r = e.crd; else break; }
+    return r;
+  },
+  // Valeur estimée : dernière estimation connue à la date (0 avant l'achat)
+  valeur(b, date) {
+    if (date < b.dateAchat || !b.estimations.length) return 0;
+    let v = b.estimations[0].valeur;
+    for (const e of b.estimations) { if (e.date <= date) v = e.valeur; else break; }
+    return v;
+  },
+  // Votre quote-part (propriétaire marqué "moi"), 100 % à défaut
+  part: b => parseNum((b.proprietaires || []).find(p => p.moi)?.part) ?? 1,
+  prixAchat: b => parseNum((b.acquisition || [])[0]?.montant) || b.estimations[0]?.valeur || 0,
+  coutTotal: b => (b.acquisition || []).reduce((s, a) => s + (parseNum(a.montant) || 0), 0),
+};
+
+/* ---------- Calculs ---------- */
+const F = {
+  classe: c => typeInfo(c.type).classe,
+  ouvert: (c, date) => !c.ferme || date < c.ferme,
+  snap(M, id, date) {
+    let r = null;
+    for (const s of M.parCompte[id] || []) { if (s.date <= date) r = s; else break; }
+    return r;
+  },
+  valeur(M, id, date) { const s = F.snap(M, id, date); return s ? s.solde : 0; },
+  // Versements cumulés connus à la date ; à défaut, on considère que tout le solde a été versé (gain nul).
+  versements(M, id, date) {
+    let v = null, last = null;
+    for (const s of M.parCompte[id] || []) {
+      if (s.date > date) break;
+      last = s;
+      if (s.versements != null) v = s.versements;
+    }
+    return last ? (v ?? last.solde) : 0;
+  },
+  hasVersements: (M, id) => (M.parCompte[id] || []).some(s => s.versements != null),
+  derniereMaj(M, id) { const a = M.parCompte[id] || []; return a.length ? a[a.length - 1].date : null; },
+
+  patrimoine(M, date) {
+    const par = { liquidites: 0, epargne: 0, placements: 0, autre: 0, immobilier: 0, dettes: 0 };
+    let net = 0;
+    M.comptes.forEach(c => { const v = F.valeur(M, c.id, date) * c.quotePart; par[F.classe(c)] += v; net += v; });
+    // Biens immobiliers : votre quote-part de la valeur en actif, du capital restant dû en dette
+    let immoNet = 0;
+    (M.immobilier || []).forEach(b => {
+      const q = Immo.part(b), v = Immo.valeur(b, date) * q, d = Immo.crd(b, date) * q;
+      par.immobilier += v; par.dettes -= d; net += v - d; immoNet += v - d;
+    });
+    return { net, par, immoNet };
+  },
+
+  moisCourant: () => D.monthKey(D.today()),
+  dateFin: mk => mk === F.moisCourant() ? D.today() : D.endOfMonth(mk),
+  premierMois(M) {
+    const firsts = [M.soldes[0]?.date, M.transactions[0]?.date].filter(Boolean).sort();
+    return firsts.length ? D.monthKey(firsts[0]) : F.moisCourant();
+  },
+  mois(M, max) {
+    const all = D.range(F.premierMois(M), F.moisCourant());
+    return max ? all.slice(-max) : all;
+  },
+
+  exclue: (M, cat) => M.budget.exclues.includes(normKey(cat)),
+  budget(M, mk) {
+    const out = new Map();
+    const add = (o) => Object.entries(o || {}).forEach(([k, v]) => out.set(normKey(k), { label: k, montant: parseNum(v) || 0 }));
+    add(M.budget.mensuel);
+    add(M.budget.exceptions[mk]);
+    return out;
+  },
+  budgetTotal: (M, mk) => [...F.budget(M, mk).values()].reduce((s, b) => s + b.montant, 0),
+  depenses(M, mk) {
+    const parCat = new Map(); const items = []; let total = 0;
+    for (const t of M.transactions) {
+      if (t.montant >= 0 || D.monthKey(t.date) !== mk || F.exclue(M, t.categorie)) continue;
+      const k = normKey(t.categorie);
+      if (!parCat.has(k)) parCat.set(k, { label: t.categorie, montant: 0 });
+      parCat.get(k).montant += -t.montant;
+      total += -t.montant;
+      items.push(t);
+    }
+    return { total, parCat, items };
+  },
+  revenus(M, mk) {
+    let total = 0;
+    for (const t of M.transactions) if (t.montant > 0 && D.monthKey(t.date) === mk && !F.exclue(M, t.categorie)) total += t.montant;
+    return total;
+  },
+  /* P&L mensuel (budget.json → "pnl") : sections Revenus / Charges / Épargne / Hors exploitation,
+     chacune découpée en groupes de catégories. Montants nets (une dépense est négative, un remboursement
+     vient en déduction). Une catégorie non listée va dans Charges › Autres (ou Hors exploitation › Autres
+     si elle est exclue du budget). Sans "pnl", les catégories sont réparties automatiquement. */
+  SECTIONS: ['Revenus', 'Charges', 'Épargne', 'Hors exploitation'],
+  pnlPlan(M) {
+    if (M._pnlPlan) return M._pnlPlan;
+    const cfg = M.budget.pnl, plan = new Map(), groupes = F.SECTIONS.map(s => ({ section: s, groupes: [] }));
+    const sec = s => groupes.find(g => g.section === s);
+    const ajouter = (section, groupe, cat) => {
+      const g = sec(section); let gr = g.groupes.find(x => x.nom === groupe);
+      if (!gr) { gr = { nom: groupe, cats: [] }; g.groupes.push(gr); }
+      if (!gr.cats.some(c => normKey(c) === normKey(cat))) gr.cats.push(cat);
+      plan.set(normKey(cat), { section, groupe });
+    };
+    if (cfg) F.SECTIONS.forEach(s => Object.entries(cfg[s] || {}).forEach(([g, cats]) => cats.forEach(c => ajouter(s, g, c))));
+    // Catégories rencontrées dans les opérations mais absentes du plan
+    const nets = new Map();
+    M.transactions.forEach(t => nets.set(normKey(t.categorie), { label: t.categorie, net: (nets.get(normKey(t.categorie))?.net || 0) + t.montant }));
+    nets.forEach(({ label, net }, k) => {
+      if (plan.has(k)) return;
+      if (F.exclue(M, label)) ajouter('Hors exploitation', 'Autres', label);
+      else if (!cfg && net > 0) ajouter('Revenus', label, label);
+      else ajouter('Charges', cfg ? 'Autres' : label, label);
+    });
+    return (M._pnlPlan = { plan, groupes });
+  },
+  // Net de chaque catégorie sur un mois, et totaux par section
+  pnl(M, mk) {
+    const { plan } = F.pnlPlan(M), parCat = new Map(), totaux = Object.fromEntries(F.SECTIONS.map(s => [s, 0]));
+    for (const t of M.transactions) {
+      if (D.monthKey(t.date) !== mk) continue;
+      const k = normKey(t.categorie);
+      parCat.set(k, (parCat.get(k) || 0) + t.montant);
+      totaux[plan.get(k)?.section || 'Charges'] += t.montant;
+    }
+    const revenus = totaux.Revenus, charges = -totaux.Charges, resultat = revenus - charges;
+    return { parCat, totaux, revenus, charges, resultat, taux: revenus > 0 ? resultat / revenus : null,
+      variation: Object.values(totaux).reduce((s, v) => s + v, 0) };
+  },
+  // Versé vers l'épargne dans le mois : section « Épargne » du P&L, nette des retraits d'épargne
+  versementsEpargne: (M, mk) => -F.pnl(M, mk).totaux['Épargne'],
+  // Toutes les catégories connues (opérations, budget, exclusions), triées
+  categories(M) {
+    const s = new Map();
+    const add = c => { if (c && !s.has(normKey(c))) s.set(normKey(c), c); };
+    M.transactions.forEach(t => { add(t.categorie); add(t.categorieOrigine); });
+    Object.keys(M.budget.mensuel).forEach(add);
+    return [...s.values()].sort((a, b) => a.localeCompare(b, 'fr'));
+  },
+  // Lignes budget / réalisé pour un mois : catégories budgétées puis hors budget.
+  lignesBudget(M, mk) {
+    const bud = F.budget(M, mk), dep = F.depenses(M, mk).parCat, rows = [];
+    bud.forEach((b, k) => rows.push({ key: k, label: b.label, budget: b.montant, spent: dep.get(k)?.montant || 0 }));
+    dep.forEach((d, k) => { if (!bud.has(k)) rows.push({ key: k, label: d.label, budget: 0, spent: d.montant, horsBudget: true }); });
+    return rows.sort((a, b) => (a.horsBudget - b.horsBudget) || (b.budget - a.budget) || (b.spent - a.spent));
+  },
+
+  // Performance d'un ensemble de comptes entre deux dates (méthode de Dietz simplifiée).
+  perf(M, ids, d0, d1) {
+    let v0 = 0, v1 = 0, f = 0;
+    ids.forEach(id => {
+      // Compte sans relevé à d0 : on ne connaît pas sa valeur de départ, il est écarté de la période
+      // (sinon ses gains antérieurs au premier relevé seraient attribués à la période)
+      if (!F.snap(M, id, d0)) return;
+      v0 += F.valeur(M, id, d0); v1 += F.valeur(M, id, d1);
+      f += F.versements(M, id, d1) - F.versements(M, id, d0);
+    });
+    const gain = v1 - v0 - f, base = v0 + f / 2;
+    return { v0, v1, flux: f, gain, pct: base > 0 ? gain / base : null };
+  },
+
+  /* TRI (taux de rendement interne annualisé, méthode XIRR) d'un ensemble de comptes entre d0 et d1.
+     Flux du point de vue de l'épargnant, aux dates des relevés : la valeur en début de période (ou au premier
+     relevé d'un compte ouvert ensuite) compte comme un versement, chaque hausse des versements cumulés comme un
+     versement (négatif), chaque baisse comme un retrait (positif), et la valeur à d1 comme un encaissement final.
+     Sans d0 : depuis le premier relevé de chaque compte. Comptes sans versements renseignés exclus.
+     Renvoie { taux, debut, annees } ou null. */
+  tri(M, ids, d0, d1) {
+    const flux = new Map(), add = (d, v) => flux.set(d, (flux.get(d) || 0) + v);
+    let debut = null;
+    ids.forEach(id => {
+      if (!F.hasVersements(M, id)) return;
+      const snaps = (M.parCompte[id] || []).filter(s => s.date <= d1);
+      if (!snaps.length) return;
+      const base = d0 ? F.snap(M, id, d0) : null;
+      let vPrec, suite;
+      if (base) {
+        add(d0, -base.solde); vPrec = F.versements(M, id, d0);
+        suite = snaps.filter(s => s.date > d0);
+        if (!debut || d0 < debut) debut = d0;
+      } else {
+        const p = snaps[0];
+        if (d0 && p.date <= d0) return;
+        add(p.date, -p.solde); vPrec = p.versements ?? p.solde;
+        suite = snaps.slice(1);
+        if (!debut || p.date < debut) debut = p.date;
+      }
+      suite.forEach(s => { if (s.versements != null) { add(s.date, -(s.versements - vPrec)); vPrec = s.versements; } });
+      add(d1, F.valeur(M, id, d1));
+    });
+    const pts = [...flux].filter(([, v]) => Math.abs(v) > 0.005).sort((a, b) => a[0].localeCompare(b[0]));
+    if (pts.length < 2 || !debut) return null;
+    const t0 = new Date(pts[0][0]).getTime();
+    const ans = pts.map(([d, v]) => [(new Date(d).getTime() - t0) / 31557600000, v]);
+    const annees = (new Date(d1).getTime() - new Date(debut).getTime()) / 31557600000;
+    const f = r => ans.reduce((s, [t, v]) => s + v / Math.pow(1 + r, t), 0);
+    let lo = -0.99, hi = 1;
+    while (f(lo) * f(hi) > 0 && hi < 1e4) hi *= 4;
+    if (f(lo) * f(hi) > 0) return null;
+    for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2; if (f(lo) * f(mid) <= 0) hi = mid; else lo = mid; }
+    return { taux: (lo + hi) / 2, debut, annees };
+  },
+
+  // Rendement de chaque mois ; null tant que les comptes n'existaient pas encore.
+  rendementsMensuels(M, ids) {
+    return F.mois(M).map(mk => {
+      const p = F.perf(M, ids, D.endOfMonth(D.addMonths(mk, -1)), F.dateFin(mk));
+      return { mk, gain: p.v0 > 0 ? p.gain : null, pct: p.v0 > 0 ? p.pct : null };
+    });
+  },
+  // Rendements mensuels chaînés par année civile (performance « time-weighted »).
+  rendementsAnnuels(mensuels) {
+    const parAn = new Map();
+    mensuels.forEach(r => {
+      if (r.pct == null) return;
+      const y = r.mk.slice(0, 4), a = parAn.get(y) || { indice: 1, gain: 0 };
+      a.indice *= 1 + r.pct; a.gain += r.gain;
+      parAn.set(y, a);
+    });
+    return parAn;
+  },
+
+  /* Lignes (positions.csv) */
+  positionsAt(M, compte, date) {
+    let d = null;
+    for (const p of M.positions) if (p.compte === compte && p.date <= date) d = p.date;
+    return d ? M.positions.filter(p => p.compte === compte && p.date === d) : [];
+  },
+  coursAt(M, compte, titre, date) {
+    let r = null;
+    for (const p of M.parLigne[compte + '|' + titre] || []) { if (p.date <= date) r = p; else break; }
+    return r ? r.cours : null;
+  },
+  comptesAvecPositions: M => [...new Set(M.positions.map(p => p.compte))],
+
+  /* Opérations (operations.csv) */
+  // Historique d'une ligne : opérations, début de la détention actuelle, dividendes reçus.
+  // depuis = date du premier achat depuis le dernier passage à zéro ; avantDebut = ligne déjà
+  // détenue au début de l'historique (date d'achat réelle inconnue).
+  historiqueLigne(M, compte, titre) {
+    const ops = (M.operations || []).filter(o => o.compte === compte && o.titre === titre);
+    if (!ops.length) return null;
+    let q = 0, depuis = null, avantDebut = false, dividendes = 0;
+    for (const o of ops) {
+      if (o.operation === 'dividende') { dividendes += o.montant || 0; continue; }
+      const avant = q;
+      q += o.operation === 'vente' ? -o.quantite : o.quantite;
+      if (avant <= 1e-9 && q > 1e-9) { depuis = o.date; avantDebut = o.operation === 'report'; }
+      if (q <= 1e-9) { q = 0; depuis = null; avantDebut = false; }
+    }
+    return { ops: ops.filter(o => o.operation !== 'report'), depuis, avantDebut, dividendes };
+  },
+};
+
+</script>
+  <script>
+'use strict';
+
+/* Données fictives générées localement (mode démo). Même format que les fichiers du dépôt. */
+const DEMO = {
+  generate() {
+    let seed = 20261021;
+    const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const gauss = () => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * rnd());
+    const between = (a, b) => a + rnd() * (b - a);
+    const int = (a, b) => Math.floor(between(a, b + 1));
+    const r2 = v => Math.round(v * 100) / 100;
+    const pick = a => a[Math.floor(rnd() * a.length)];
+
+    const today = D.today(), cm = D.monthKey(today), dayNow = Number(today.slice(8, 10));
+    const start = D.addMonths(cm, -21);
+    const year = Number(cm.slice(0, 4));
+    const julyKey = (cm >= year + '-07' ? year : year - 1) + '-07';
+    const decKey = (year - 1) + '-12';
+
+    const comptes = { comptes: [
+      { id: 'joint',    nom: 'Compte joint',  banque: 'Banque A',   type: 'courant' },
+      { id: 'livret-a', nom: 'Livret A',      banque: 'Banque A',   type: 'livret', taux: 1.7 },
+      { id: 'ldds',     nom: 'LDDS',          banque: 'Banque A',   type: 'livret', taux: 1.7 },
+      { id: 'av',       nom: 'Assurance vie', banque: 'Assureur B', type: 'assurance-vie' },
+      { id: 'pea',      nom: 'PEA',           banque: 'Courtier C', type: 'pea' },
+    ] };
+
+    const budget = {
+      mensuel: { Logement: 1250, Courses: 650, Factures: 220, Transport: 250, Restaurants: 220, Shopping: 200, Loisirs: 150, Voyages: 100, Abonnements: 75, 'Santé': 60 },
+      exceptions: { [julyKey]: { Voyages: 1500 }, [decKey]: { Shopping: 450, Cadeaux: 400 } },
+      exclues: ['Épargne', 'Virement interne'],
+    };
+
+    const soldes = [], transactions = [];
+    const st = {
+      'livret-a': { v: 14000, f: 14000, add: 200 },
+      'ldds':     { v: 7500,  f: 7500,  add: 100 },
+      'av':       { v: 24000, f: 21500, add: 300, mu: 0.004, sd: 0.012 },
+      'pea':      { v: 11000, f: 9500,  add: 250, mu: 0.006, sd: 0.035 },
+    };
+
+    D.range(start, cm).forEach(mk => {
+      const date = mk === cm ? today : D.endOfMonth(mk);
+      const month = Number(mk.slice(5, 7));
+      const full = mk !== cm || dayNow >= 28;
+      soldes.push({ date, compte: 'joint', solde: r2(3200 + gauss() * 700) });
+      Object.entries(st).forEach(([id, s]) => {
+        if (full) { s.f += s.add; s.v += s.add; }
+        if (s.mu != null) s.v *= 1 + s.mu + gauss() * s.sd * (mk === cm ? Math.sqrt(dayNow / 30) : 1);
+        else if (month === 12) s.v *= 1.017;
+        soldes.push({ date, compte: id, solde: r2(s.v), versements: s.f });
+      });
+
+      const add = (day, libelle, montant, categorie) => {
+        if (mk === cm && day > dayNow) return;
+        transactions.push({ date: mk + '-' + pad(Math.min(day, D.daysInMonth(mk))), libelle, montant: r2(montant), categorie, compte: 'joint' });
+      };
+      const many = (n, cat, a, b, libs) => { for (let i = 0; i < n; i++) add(int(1, 28), pick(libs), -between(a, b), cat); };
+
+      add(27, 'Salaire Alex', 3150, 'Salaire');
+      add(27, 'Salaire Sam', 2550, 'Salaire');
+      add(3, 'Loyer', -1250, 'Logement');
+      add(8, 'Électricité', -between(70, 130), 'Factures');
+      add(10, 'Assurance habitation', -28.5, 'Factures');
+      add(12, 'Box internet', -39.99, 'Factures');
+      add(14, 'Forfaits mobiles', -25.98, 'Factures');
+      add(2, 'Salle de sport', -39.9, 'Abonnements');
+      add(15, 'Streaming vidéo', -13.49, 'Abonnements');
+      add(18, 'Streaming musique', -17.99, 'Abonnements');
+      add(1, 'Pass transports', -86.4, 'Transport');
+      many(int(9, 12), 'Courses', 25, 110, ['Supermarché', 'Marché', 'Boulangerie', 'Épicerie bio', 'Drive']);
+      many(int(3, 7), 'Restaurants', 18, 65, ['Restaurant', 'Brasserie', 'Livraison repas', 'Café']);
+      many(int(1, 3), 'Transport', 55, 75, ['Carburant', 'Péage', 'Train']);
+      many(int(1, 4), 'Loisirs', 12, 70, ['Cinéma', 'Concert', 'Librairie', 'Musée']);
+      many(month === 12 ? int(3, 5) : int(0, 3), 'Shopping', 25, 160, ['Vêtements', 'Maison', 'High-tech']);
+      many(int(0, 2), 'Santé', 20, 55, ['Pharmacie', 'Médecin']);
+      if (month === 12) many(int(2, 4), 'Cadeaux', 40, 120, ['Cadeaux']);
+      else if (rnd() < 0.15) many(1, 'Cadeaux', 30, 80, ['Cadeau anniversaire']);
+      if (month === 7 || month === 8) many(int(1, 2), 'Voyages', 300, 800, ['Location vacances', 'Billets avion', 'Hôtel']);
+      else if (rnd() < 0.25) many(1, 'Voyages', 80, 250, ['Week-end', 'Train week-end']);
+      add(28, 'Virement épargne', -850, 'Épargne');
+    });
+
+    return { comptes, soldes, transactions, budget };
+  },
+};
+
+</script>
+  <script>
+'use strict';
+
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+const Charts = {
+  list: [],
+  destroyAll() { this.list.forEach(c => c.destroy()); this.list = []; },
+
+  colors() {
+    return {
+      text: cssVar('--text'), text2: cssVar('--text-2'), muted: cssVar('--muted'),
+      grid: cssVar('--grid'), axis: cssVar('--axis'), surface: cssVar('--surface'), surface3: cssVar('--surface-3'),
+      series: [1, 2, 3, 4, 5, 6, 7, 8].map(i => cssVar('--series-' + i)),
+      pos: cssVar('--div-pos'), neg: cssVar('--div-neg'),
+    };
+  },
+
+  // Ligne verticale qui suit le survol (graphiques en courbes).
+  crosshair: {
+    id: 'crosshair',
+    afterDatasetsDraw(chart) {
+      const a = chart.tooltip && chart.tooltip.getActiveElements();
+      if (!a || !a.length) return;
+      const x = a[0].element.x, { top, bottom } = chart.chartArea, ctx = chart.ctx;
+      ctx.save();
+      ctx.strokeStyle = Charts.colors().axis; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+      ctx.restore();
+    },
+  },
+
+  options(c, { stacked = false, legend = true } = {}) {
+    return {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: legend, position: 'top', align: 'start',
+          labels: { color: c.text2, usePointStyle: true, pointStyle: 'rectRounded', boxWidth: 10, boxHeight: 10, padding: 14 },
+        },
+        tooltip: {
+          backgroundColor: c.surface3, titleColor: c.text, bodyColor: c.text2, footerColor: c.text,
+          titleFont: { weight: '700', size: 13 }, padding: 12, cornerRadius: 12, boxPadding: 4, usePointStyle: true,
+          borderColor: c.axis, borderWidth: 1,
+          callbacks: { label: ctx => ` ${ctx.dataset.label} : ${eur(ctx.parsed.y)}` },
+        },
+      },
+      scales: {
+        x: { stacked, grid: { display: false }, border: { display: false }, ticks: { color: c.muted, maxRotation: 0, autoSkipPadding: 12 } },
+        y: { stacked, grid: { color: c.grid }, border: { display: false, dash: [4, 4] }, ticks: { color: c.muted, callback: v => eurShort(v), maxTicksLimit: 5, padding: 8 } },
+      },
+    };
+  },
+
+  line(canvas, labels, series, { stacked = false, area = false } = {}) {
+    const c = this.colors();
+    const datasets = series.map((s, i) => {
+      const col = s.color || c.series[i % 8];
+      // Première courbe (hors empilement) : dégradé discret sous la ligne
+      const degrade = !area && i === 0 && !s.dash;
+      return {
+        label: s.label, data: s.data, borderColor: col,
+        backgroundColor: degrade ? (ctx => Charts.degrade(ctx, col)) : (area ? col + '33' : col),
+        borderWidth: i === 0 ? 2.5 : 2, pointRadius: 0, pointHoverRadius: 5, pointHoverBorderWidth: 2, pointHoverBorderColor: c.surface,
+        pointHoverBackgroundColor: col, tension: 0.35, borderDash: s.dash || [],
+        fill: area ? (i === 0 ? 'origin' : '-1') : (degrade ? 'origin' : false),
+      };
+    });
+    const opts = this.options(c, { stacked, legend: series.length > 1 });
+    if (stacked) opts.scales.y.beginAtZero = true;
+    if (stacked) opts.plugins.tooltip.callbacks.footer = items => 'Total : ' + eur(items.reduce((s, it) => s + it.parsed.y, 0));
+    return this.make(canvas, { type: 'line', data: { labels, datasets }, options: opts, plugins: [this.crosshair] });
+  },
+
+  // Dégradé vertical de la couleur vers la transparence, sur la hauteur de la zone de tracé
+  degrade(ctx, col) {
+    const { chart } = ctx, a = chart.chartArea;
+    if (!a) return col + '22';
+    const g = chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
+    g.addColorStop(0, col + '55'); g.addColorStop(1, col + '00');
+    return g;
+  },
+
+  // Barres mensuelles + ligne de référence (même axe).
+  barsWithLine(canvas, labels, bars, line, { highlightLast = false } = {}) {
+    const c = this.colors();
+    const colors = bars.data.map((_, i) => highlightLast && i === bars.data.length - 1 ? c.series[0] + '80' : c.series[0]);
+    const datasets = [
+      { type: 'bar', label: bars.label, data: bars.data, backgroundColor: colors, borderRadius: 6, borderSkipped: 'start', categoryPercentage: 0.7, barPercentage: 0.9, order: 2 },
+    ];
+    // line facultative (pas de budget dans la vue par banque)
+    if (line) datasets.push({ type: 'line', label: line.label, data: line.data, borderColor: c.text2, borderWidth: 2, borderDash: [5, 4], pointRadius: 0, pointHoverRadius: 4, stepped: 'middle', order: 1 });
+    return this.make(canvas, { type: 'bar', data: { labels, datasets }, options: this.options(c) });
+  },
+
+  // Barres empilées (une série par composante, ex. capital / intérêts / assurance par année).
+  stackedBars(canvas, labels, series, { highlight = -1 } = {}) {
+    const c = this.colors();
+    const datasets = series.map((s, i) => {
+      const col = s.color || c.series[i % 8];
+      return { label: s.label, data: s.data, backgroundColor: s.data.map((_, j) => highlight >= 0 && j !== highlight ? col + '99' : col),
+        borderRadius: 4, categoryPercentage: 0.75, barPercentage: 0.9 };
+    });
+    const opts = this.options(c, { stacked: true });
+    opts.plugins.tooltip.callbacks.footer = items => 'Total : ' + eur(items.reduce((s, it) => s + it.parsed.y, 0));
+    return this.make(canvas, { type: 'bar', data: { labels, datasets }, options: opts });
+  },
+
+  // Barres positives / négatives (gains mensuels), deux pôles divergents.
+  signedBars(canvas, labels, label, data, { tooltip } = {}) {
+    const c = this.colors();
+    const opts = this.options(c, { legend: false });
+    if (tooltip?.label) opts.plugins.tooltip.callbacks.label = tooltip.label;
+    const datasets = [{ label, data, backgroundColor: data.map(v => v >= 0 ? c.pos : c.neg), borderRadius: 6, borderSkipped: 'start', categoryPercentage: 0.7, barPercentage: 0.9 }];
+    return this.make(canvas, { type: 'bar', data: { labels, datasets }, options: opts });
+  },
+
+  // Waterfall : barres flottantes. steps = [{ label, value, total }] ; une étape « total » part de zéro,
+  // les autres partent du cumul précédent (valeur négative = dépense).
+  waterfall(canvas, steps) {
+    const c = this.colors();
+    let cumul = 0;
+    const bars = steps.map(s => {
+      if (s.total) { cumul = s.value; return [0, s.value]; }
+      const debut = cumul; cumul += s.value; return [debut, cumul];
+    });
+    const couleurs = steps.map(s => s.total ? (s.value >= 0 ? (s.fin ? c.pos : c.series[0]) : c.neg) : c.neg + 'cc');
+    const opts = this.options(c, { legend: false });
+    opts.interaction = { mode: 'nearest', intersect: true };
+    opts.plugins.tooltip.callbacks.label = ctx => {
+      const s = steps[ctx.dataIndex];
+      return ` ${s.total ? eur(s.value) : eurSigned(s.value)} · reste ${eur(bars[ctx.dataIndex][1])}`;
+    };
+    opts.scales.x.ticks.autoSkip = false;
+    opts.scales.x.ticks.callback = function (v) { const l = this.getLabelForValue(v); return l.length > 14 ? l.slice(0, 13) + '…' : l; };
+    // Reliure entre deux barres successives
+    const liens = {
+      id: 'liens',
+      afterDatasetsDraw(chart) {
+        const meta = chart.getDatasetMeta(0), y = chart.scales.y, ctx = chart.ctx;
+        ctx.save(); ctx.strokeStyle = c.axis; ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+        for (let i = 0; i < meta.data.length - 1; i++) {
+          const a = meta.data[i], b = meta.data[i + 1], v = bars[i][1];
+          ctx.beginPath(); ctx.moveTo(a.x + a.width / 2, y.getPixelForValue(v)); ctx.lineTo(b.x - b.width / 2, y.getPixelForValue(v)); ctx.stroke();
+        }
+        ctx.restore();
+      },
+    };
+    const datasets = [{ label: 'Montant', data: bars, backgroundColor: couleurs, borderRadius: 3, borderSkipped: false, categoryPercentage: 0.8, barPercentage: 0.9 }];
+    return this.make(canvas, { type: 'bar', data: { labels: steps.map(s => s.label), datasets }, options: opts, plugins: [liens] });
+  },
+
+  make(canvas, cfg) {
+    if (typeof Chart === 'undefined') {
+      canvas.parentElement.innerHTML = '<p class="muted center">Graphique indisponible (bibliothèque non chargée, êtes-vous hors ligne ?)</p>';
+      return null;
+    }
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    Chart.defaults.font.size = 12;
+    const ch = new Chart(canvas, cfg);
+    this.list.push(ch);
+    return ch;
+  },
+};
+
+</script>
+  <script>
+'use strict';
+
+/* ---------- Petits composants HTML ---------- */
+const UI = {
+  card: (title, body, { sub = '', cls = '', actions = '' } = {}) => `
+    <section class="card ${cls}">
+      <header class="card-h"><div><h2>${title}</h2>${sub ? `<p class="card-sub">${sub}</p>` : ''}</div>${actions}</header>
+      ${body}
+    </section>`,
+  kpi: (label, value, sub = '', cls = '') => `
+    <div class="kpi ${cls}"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div>${sub ? `<div class="kpi-sub">${sub}</div>` : ''}</div>`,
+  // Variation avec flèche ; invert = une hausse est une mauvaise nouvelle (dépenses).
+  delta(v, base, { invert = false, suffix = '' } = {}) {
+    if (v == null || !isFinite(v)) return '<span class="muted">—</span>';
+    const good = invert ? v < 0 : v > 0;
+    const cls = Math.abs(v) < 0.5 ? 'flat' : good ? 'up' : 'down';
+    const arrow = Math.abs(v) < 0.5 ? '■' : v > 0 ? '▲' : '▼';
+    const p = base ? ` (${pctSigned(v / Math.abs(base))})` : '';
+    return `<span class="delta ${cls}">${arrow} ${eurSigned(v)}${p}</span>${suffix ? ` <span class="muted">${suffix}</span>` : ''}`;
+  },
+  status(ratio, pace) {
+    if (ratio > 1.005) return '<span class="status critical">▲ Dépassé</span>';
+    if (ratio >= 0.995) return '<span class="status neutral">● Atteint</span>';
+    if (ratio > Math.max(0.9, pace ?? 0.9)) return '<span class="status warning">● À surveiller</span>';
+    return '<span class="status good">✓ OK</span>';
+  },
+  chart: (id, h = 280) => `<div class="chart" style="height:${h}px"><canvas id="${id}"></canvas></div>`,
+  empty: msg => `<p class="muted center pad">${msg}</p>`,
+};
+
+/* ---------- Points d'attention ----------
+   Constats calculés à partir des données (pas des conseils) : soldes négatifs, épargne disponible rapportée aux
+   charges, catégories toujours au-dessus du budget, évolution du taux d'épargne, opérations à classer, comptes
+   non mis à jour. V = vue consolidée (vueDepenses). */
+function pointsAttention(M, V) {
+  const today = D.today(), cm = F.moisCourant(), pts = [];
+  const mois = n => D.range(D.addMonths(cm, -n), D.addMonths(cm, -1));
+  const ajout = (niveau, titre, texte, lien) => pts.push({ niveau, titre, texte, lien });
+
+  // Comptes courants passés dans le rouge en fin de mois (6 derniers mois)
+  const debut6 = D.endOfMonth(D.addMonths(cm, -6));
+  const neg = M.soldes.filter(s => s.solde < 0 && s.date > debut6 && F.classe(M.comptes.find(c => c.id === s.compte) || {}) === 'liquidites');
+  if (neg.length) {
+    const noms = [...new Set(neg.map(s => M.comptes.find(c => c.id === s.compte).nom))];
+    ajout('critical', `${neg.length} fin${neg.length > 1 ? 's' : ''} de mois dans le rouge`,
+      `${noms.join(', ')} : ${neg.map(s => `${eur(s.solde)} au ${D.fmt(s.date)}`).join(', ')}.`, '#overview');
+  }
+
+  // Épargne disponible (livrets, fonds monétaire) rapportée aux charges mensuelles moyennes (6 derniers mois)
+  const dispo = M.comptes.filter(c => F.classe(c) === 'epargne' && F.ouvert(c, today)).reduce((s, c) => s + F.valeur(M, c.id, today) * c.quotePart, 0);
+  const charges6 = mois(6).reduce((s, m) => s + F.pnl(V, m).charges, 0) / 6;
+  if (charges6 > 0) {
+    const n = dispo / charges6;
+    ajout(n < 3 ? 'critical' : n < 6 ? 'warning' : 'good', `Épargne disponible : ${n.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} mois de charges`,
+      `${eur(dispo)} sur livrets et fonds monétaire, pour ${eur(charges6)} de charges nettes par mois en moyenne (6 derniers mois).`, '#epargne');
+  }
+
+  // Catégories au-dessus du budget chacun des 3 derniers mois
+  const m3 = mois(3), lignes = m3.map(m => F.lignesBudget(V, m));
+  const toujours = lignes[0].filter(r => r.budget > 0 && lignes.every(l => { const x = l.find(y => y.key === r.key); return x && x.spent > x.budget; }));
+  if (toujours.length) ajout('warning', `${toujours.length} catégorie${toujours.length > 1 ? 's' : ''} au-dessus du budget 3 mois de suite`,
+    toujours.map(r => `${esc(r.label)} (${eur(m3.reduce((s, m, i) => s + (lignes[i].find(y => y.key === r.key)?.spent || 0), 0) / 3)} / ${eur(r.budget)} par mois)`).join(', ') + '.', '#depenses');
+
+  // Taux d'épargne : 3 derniers mois contre 12 derniers mois
+  const taux = ms => { const P = ms.map(m => F.pnl(V, m)), r = P.reduce((s, p) => s + p.revenus, 0); return r > 0 ? P.reduce((s, p) => s + p.resultat, 0) / r : null; };
+  const t3 = taux(mois(3)), t12 = taux(mois(12));
+  if (t3 != null && t12 != null) ajout(t3 < t12 - 0.05 ? 'warning' : 'good', `Taux d’épargne : ${pct(t3)} sur 3 mois`,
+    `contre ${pct(t12)} sur 12 mois (revenus − charges nettes, compte joint à votre part).`, '#depenses');
+
+  // Opérations importantes non identifiées (Divers, Non catégorisé) sur 3 mois
+  const aClasser = V.transactions.filter(t => t.date >= m3[0] + '-01' && t.montant <= -100 && ['divers', 'non categorise'].includes(normKey(t.categorie)));
+  if (aClasser.length) ajout('warning', `${aClasser.length} opération${aClasser.length > 1 ? 's' : ''} de plus de 100 € à classer`,
+    aClasser.map(t => `${esc(t.libelle)} ${eur(-t.montant)} (${D.fmt(t.date)})`).join(', ') + '.', '#depenses');
+
+  // Comptes dont le solde n'a pas été mis à jour depuis plus de 40 jours
+  const vieux = M.comptes.filter(c => F.ouvert(c, today) && F.derniereMaj(M, c.id) && D.diffDays(F.derniereMaj(M, c.id), today) > 40);
+  if (vieux.length) ajout('neutral', `${vieux.length} compte${vieux.length > 1 ? 's' : ''} à mettre à jour`,
+    vieux.map(c => `${esc(c.nom)} (${D.fmt(F.derniereMaj(M, c.id))})`).join(', ') + '.', '#overview');
+
+  const ordre = { critical: 0, warning: 1, neutral: 2, good: 3 }, icone = { critical: '▲', warning: '●', neutral: '●', good: '✓' };
+  return pts.sort((a, b) => ordre[a.niveau] - ordre[b.niveau]).map(p => `
+    <li class="attention"><span class="status ${p.niveau}">${icone[p.niveau]}</span>
+      <div><strong>${p.titre}</strong><div class="muted small">${p.texte}</div></div></li>`).join('');
+}
+
+/* ---------- Vue d'ensemble ---------- */
+function pageOverview(M) {
+  const today = D.today(), cm = F.moisCourant();
+  const now = F.patrimoine(M, today);
+  const finMoisDernier = F.patrimoine(M, D.endOfMonth(D.addMonths(cm, -1)));
+  const debutAnnee = F.patrimoine(M, (Number(cm.slice(0, 4)) - 1) + '-12-31');
+  const ilYaUnAn = F.patrimoine(M, D.endOfMonth(D.addMonths(cm, -12)));
+
+  // Budget du mois : vue consolidée (virements internes neutralisés, comptes partagés à votre part)
+  const V = vueDepenses(M, '');
+  const dep = F.depenses(V, cm), bud = F.budgetTotal(V, cm), rev = F.revenus(V, cm);
+  const prevMk = D.addMonths(cm, -1), revPrev = F.pnl(V, prevMk).revenus;
+  const tauxEpargne = F.pnl(V, prevMk).taux;
+  const ratio = bud > 0 ? dep.total / bud : 0;
+  const pace = Number(today.slice(8, 10)) / D.daysInMonth(cm);
+  const depasse = F.lignesBudget(V, cm).filter(r => r.budget > 0 && r.spent > r.budget);
+
+  const tiles = ['liquidites', 'epargne', 'placements', 'immobilier', 'autre', 'dettes']
+    .filter(k => !['autre', 'immobilier', 'dettes'].includes(k) || now.par[k] !== 0)
+    .map(k => UI.kpi(CLASSES[k], eur(now.par[k]),
+      `${pct(now.net ? now.par[k] / now.net : null)} du patrimoine · ${UI.delta(now.par[k] - finMoisDernier.par[k])}`))
+    .join('');
+
+  const comptesRows = M.comptes.filter(c => F.ouvert(c, today)).map(c => {
+    const maj = F.derniereMaj(M, c.id), age = maj ? D.diffDays(maj, today) : null;
+    return `<tr>
+      <td><strong>${esc(c.nom)}</strong><div class="muted small">${esc(c.banque)}</div></td>
+      <td>${esc(typeInfo(c.type).label)}</td>
+      <td class="num">${eur(F.valeur(M, c.id, today), true)}</td>
+      <td class="num ${age > 40 ? 'stale' : 'muted'}">${maj ? D.fmt(maj) : '—'}${age > 40 ? ' <span title="Solde non mis à jour depuis plus de 40 jours">⚠</span>' : ''}</td>
+    </tr>`;
+  }).join('');
+
+  const last = M.transactions.slice(-8).reverse().map(t => `
+    <tr><td class="muted">${D.fmt(t.date)}</td><td>${esc(t.libelle)}<div class="muted small">${esc(t.categorie)}</div></td>
+    <td class="num ${t.montant > 0 ? 'pos' : ''}">${eurSigned(t.montant, true)}</td></tr>`).join('');
+
+  const html = `
+    <div class="page-h"><h1>Vue d'ensemble</h1><p class="muted">Situation au ${D.fmt(today)}</p></div>
+    <div class="grid">
+      <section class="card hero span-12">
+        <div class="hero-main">
+          <div class="kpi-label">Patrimoine net</div>
+          <div class="hero-value">${eur(now.net)}</div>
+          <div class="hero-deltas">
+            <div>${UI.delta(now.net - finMoisDernier.net, finMoisDernier.net)} <span class="muted">depuis fin ${D.monthLabel(prevMk, true)}</span></div>
+            <div>${UI.delta(now.net - debutAnnee.net, debutAnnee.net)} <span class="muted">depuis le 1er janvier</span></div>
+            <div>${UI.delta(now.net - ilYaUnAn.net, ilYaUnAn.net)} <span class="muted">sur 12 mois</span></div>
+          </div>
+        </div>
+        <div class="kpis">${tiles}</div>
+      </section>
+
+      ${UI.card('Évolution du patrimoine', UI.chart('ch-patrimoine', 300), { sub: '24 derniers mois, par grande classe d’actifs', cls: 'span-8' })}
+
+      ${UI.card(`${D.monthLabel(cm, true).replace(/^./, c => c.toUpperCase())}`, `
+        <div class="budget-sum">
+          <div class="row-between"><span>Dépenses</span><strong>${eur(dep.total)} <span class="muted">/ ${eur(bud)}</span></strong></div>
+          <div class="track big"><div class="fill ${ratio > 1 ? 'over' : ''}" style="width:${Math.min(ratio, 1) * 100}%"></div><div class="pace" style="left:${pace * 100}%" title="Avancement du mois"></div></div>
+          <div class="row-between small muted"><span>${pct(ratio)} du budget consommé</span><span>${pct(pace)} du mois écoulé</span></div>
+        </div>
+        <dl class="facts">
+          <div><dt>Revenus du mois</dt><dd>${rev ? eur(rev) : `<span class="muted">pas encore reçus (${D.monthLabel(prevMk)} : ${eur(revPrev)})</span>`}</dd></div>
+          <div><dt>Reste à dépenser</dt><dd>${bud - dep.total >= 0 ? eur(bud - dep.total) : `<span class="neg">${eur(bud - dep.total)}</span>`}</dd></div>
+          <div><dt>Taux d’épargne (${D.monthLabel(prevMk)})</dt><dd>${pct(tauxEpargne)}</dd></div>
+        </dl>
+        ${depasse.length ? `<p class="small"><span class="status critical">▲ Dépassé</span> ${depasse.map(r => esc(r.label)).join(', ')}</p>` : '<p class="small"><span class="status good">✓ OK</span> Aucune catégorie en dépassement</p>'}
+        <a class="link" href="#depenses">Détail des dépenses →</a>`, { sub: 'Mois en cours', cls: 'span-4' })}
+
+      ${UI.card('Points d’attention', `<ul class="attentions">${pointsAttention(M, V) || '<li class="muted">Rien à signaler.</li>'}</ul>
+        <p class="small muted">Constats calculés à partir de vos données, pas des conseils financiers.</p>`, { sub: 'Mis à jour à chaque chargement', cls: 'span-12' })}
+
+      ${UI.card('Comptes', `<div class="table-wrap"><table>
+        <thead><tr><th>Compte</th><th>Type</th><th class="num">Solde</th><th class="num">Mise à jour</th></tr></thead>
+        <tbody>${comptesRows}</tbody>
+        <tfoot><tr><td colspan="2">Total</td><td class="num">${eur(now.net, true)}</td><td></td></tr></tfoot></table></div>`, { cls: 'span-7' })}
+
+      ${UI.card('Dernières opérations', last ? `<div class="table-wrap"><table><tbody>${last}</tbody></table></div>` : UI.empty('Aucune opération.'), { cls: 'span-5' })}
+    </div>`;
+
+  return { html, after() {
+    const months = F.mois(M, 24);
+    const P = months.map(mk => F.patrimoine(M, F.dateFin(mk)));
+    const keys = ['liquidites', 'epargne', 'placements', 'autre'].filter(k => P.some(p => p.par[k] !== 0));
+    const series = keys.map(k => ({ label: CLASSES[k], data: P.map(p => p.par[k]) }));
+    // Immobilier net du crédit (votre quote-part), pour garder un empilement positif
+    if (P.some(p => p.immoNet !== 0)) series.push({ label: 'Immobilier (net du crédit)', data: P.map(p => p.immoNet) });
+    Charts.line(document.getElementById('ch-patrimoine'), months.map(m => D.monthLabel(m)), series, { stacked: true, area: true });
+  } };
+}
+
+/* ---------- Dépenses ---------- */
+// P&L mensuel : une colonne par mois (12 mois jusqu'à mk), une ligne par groupe (dépliable en catégories)
+function tablePnl(M, mk, state) {
+  const mois = D.range(D.addMonths(mk, -11), mk);
+  const P = mois.map(m => F.pnl(M, m));
+  const { groupes } = F.pnlPlan(M);
+  const ouverts = state.pnlOuverts || new Set();
+  const cell = (v, { m, cat, fort } = {}) => {
+    const cls = `num pnl-cell ${v < -0.005 ? 'pnl-neg' : ''} ${fort ? 'strong-cell' : ''} ${cat && Math.abs(v) >= 0.005 ? 'pnl-clic' : ''}`;
+    const attrs = cat && Math.abs(v) >= 0.005 ? ` data-mois="${m}" data-cat="${esc(normKey(cat))}" title="Voir les opérations"` : '';
+    return `<td class="${cls}"${attrs}>${Math.abs(v) < 0.005 ? '<span class="muted">–</span>' : eur(v)}</td>`;
+  };
+  const totaux = vals => { const t = vals.reduce((s, v) => s + v, 0); return `${cell(t, { fort: true })}${cell(t / vals.length)}`; };
+  const ligne = (label, vals, { cls = '', cat = null, groupe = null, ouvert = false, nb = 0 } = {}) =>
+    `<tr class="${cls}"${groupe ? ` data-groupe="${esc(groupe)}" tabindex="0" title="Détailler"` : ''}>
+      <th scope="row">${groupe && nb > 1 ? `<span class="chevron ${ouvert ? 'ouvert' : ''}" aria-hidden="true">▸</span> ` : ''}${esc(label)}</th>
+      ${vals.map((v, i) => cell(v, { m: mois[i], cat })).join('')}${totaux(vals)}</tr>`;
+  const valsCat = c => P.map(p => p.parCat.get(normKey(c)) || 0);
+  const corps = groupes.map(sec => {
+    if (!sec.groupes.length) return '';
+    const lignes = sec.groupes.map(g => {
+      const vals = P.map(p => g.cats.reduce((s, c) => s + (p.parCat.get(normKey(c)) || 0), 0));
+      if (vals.every(v => Math.abs(v) < 0.005)) return '';
+      const cle = sec.section + '|' + g.nom, ouvert = ouverts.has(cle);
+      // Groupe d'une seule catégorie : la ligne elle-même mène aux opérations
+      if (g.cats.length === 1) return ligne(g.nom, vals, { cls: 'pnl-g', cat: g.cats[0] });
+      return ligne(g.nom, vals, { cls: 'pnl-g pnl-groupe', groupe: cle, ouvert, nb: g.cats.length })
+        + (ouvert ? g.cats.map(c => ligne(c, valsCat(c), { cls: 'pnl-c', cat: c })).join('') : '');
+    }).join('');
+    const total = P.map(p => p.totaux[sec.section]);
+    return `<tr class="pnl-section"><th colspan="${mois.length + 3}">${esc(sec.section)}</th></tr>${lignes}
+      ${ligne(sec.section === 'Hors exploitation' ? 'Total hors exploitation' : 'Total ' + sec.section.toLowerCase(), total, { cls: 'pnl-total' })}
+      ${sec.section === 'Charges' ? `${ligne('Capacité d’épargne (revenus − charges)', P.map(p => p.resultat), { cls: 'pnl-resultat' })}
+        <tr class="pnl-taux"><th scope="row">Taux d’épargne</th>${P.map(p => `<td class="num">${pct(p.taux)}</td>`).join('')}
+          <td class="num strong-cell">${pct(P.reduce((s, p) => s + p.revenus, 0) > 0 ? P.reduce((s, p) => s + p.resultat, 0) / P.reduce((s, p) => s + p.revenus, 0) : null)}</td><td></td></tr>` : ''}`;
+  }).join('');
+  return `<div class="table-wrap pnl-wrap"><table class="pnl">
+    <thead><tr><th>en €</th>${mois.map(m => `<th class="num ${m === mk ? 'pnl-sel' : ''}">${D.monthLabel(m)}</th>`).join('')}<th class="num">Total</th><th class="num">Moy./mois</th></tr></thead>
+    <tbody>${corps}
+      ${ligne('Variation du compte courant', P.map(p => p.variation), { cls: 'pnl-resultat' })}</tbody></table></div>
+    <p class="small muted">Montants nets : une dépense est négative, un remboursement (CPAM, mutuelle, ami, note de frais) vient en déduction. La variation du compte courant additionne toutes les sections. Le découpage se règle dans <code>budget.json</code> (section <code>pnl</code>).</p>`;
+}
+
+/* Vue de la page Dépenses : une banque (ses comptes, virements vers vos autres comptes compris, sans budget),
+   ou tous les comptes, où les virements entre vos comptes sont neutralisés (retirés des deux côtés) et où
+   un compte partagé (quotePart < 1, ex. compte joint) ne compte que pour votre part : ses opérations sont
+   réduites à cette part, et les apports du co-titulaire (« Participation conjoint »), qui financent la sienne,
+   sont retirés. */
+const INTERNE = 'Virement interne', APPORT_COTITULAIRE = 'Participation conjoint';
+function opsVotrePart(M) {
+  const parts = new Map(M.comptes.filter(c => c.quotePart < 1).map(c => [c.id, c.quotePart]));
+  return M.transactions.flatMap(t => {
+    const q = parts.get(t.compte);
+    if (q == null) return [t];
+    if (normKey(t.categorie) === normKey(APPORT_COTITULAIRE)) return [];
+    // Copie à votre part ; l'id et la catégorie d'origine restent ceux de l'opération (corrections de catégorie)
+    return [Object.assign(Object.create(t), { montant: Math.round(t.montant * q * 100) / 100, part: q })];
+  });
+}
+// Comptes qui ont des opérations (comptes courants), et leurs banques
+function comptesAvecOps(M, banque) {
+  const avecOps = new Set(M.transactions.map(t => t.compte));
+  return M.comptes.filter(c => avecOps.has(c.id) && (banque == null || c.onglet === banque));
+}
+const banquesDepenses = M => [...new Set(comptesAvecOps(M).map(c => c.onglet))];
+function vueDepenses(M, banque) {
+  const interne = t => normKey(t.categorie) === normKey(INTERNE);
+  if (!banque) {
+    const V = { ...M, transactions: opsVotrePart(M).filter(t => !interne(t)), internes: M.transactions.filter(interne) };
+    delete V._pnlPlan;
+    return V;
+  }
+  const ids = new Set(comptesAvecOps(M, banque).map(c => c.id));
+  const transactions = M.transactions.filter(t => ids.has(t.compte));
+  const V = { ...M, transactions, internes: transactions.filter(interne), banque, idsBanque: [...ids],
+    budget: { ...M.budget, mensuel: {}, exceptions: {} } };
+  delete V._pnlPlan;
+  return V;
+}
+
+function pageDepenses(Mtout, state) {
+  const banques = banquesDepenses(Mtout);
+  const banque = banques.includes(state.banque) ? state.banque : '';
+  const M = vueDepenses(Mtout, banque), parBanque = !!banque;
+  const cm = F.moisCourant();
+  const allMonths = F.mois(M).reverse();
+  const mk = allMonths.includes(state.mois) ? state.mois : cm;
+  const isCurrent = mk === cm;
+  const today = D.today();
+  const pace = isCurrent ? Number(today.slice(8, 10)) / D.daysInMonth(mk) : 1;
+
+  const rows = F.lignesBudget(M, mk);
+  const dep = F.depenses(M, mk);
+  const bud = F.budgetTotal(M, mk);
+  const reste = bud - dep.total;
+  // Projection : pour chaque catégorie, le plus élevé entre le déjà-dépensé et la moyenne des 3 mois précédents
+  // (évite d'extrapoler les charges fixes comme le loyer, déjà payées en début de mois).
+  const projection = isCurrent ? rows.reduce((s, r) => {
+    const moy = [1, 2, 3].reduce((a, i) => a + (F.depenses(M, D.addMonths(mk, -i)).parCat.get(r.key)?.montant || 0), 0) / 3;
+    return s + Math.max(r.spent, moy);
+  }, 0) : null;
+
+  // Revenus, épargne du mois et taux d'épargne (hors catégories exclues du budget)
+  const P = F.pnl(M, mk), rev = P.revenus, epargne = P.resultat, taux = P.taux;
+  const verse = F.versementsEpargne(M, mk);
+  const m12 = D.range(D.addMonths(cm, -12), D.addMonths(cm, -1));
+  const p12 = m12.map(m => F.pnl(M, m)), rev12 = p12.reduce((s, p) => s + p.revenus, 0), res12 = p12.reduce((s, p) => s + p.resultat, 0);
+  const taux12 = rev12 > 0 ? res12 / rev12 : null;
+
+  // Opérations du mois, avec un menu pour changer la catégorie
+  const opsMois = M.transactions.filter(t => D.monthKey(t.date) === mk);
+  const toutesCats = F.categories(Mtout);
+  // Virements entre vos comptes du mois : reçus / envoyés (vue banque) ou neutralisés (tous les comptes)
+  const internesMois = M.internes.filter(t => D.monthKey(t.date) === mk);
+  const recuInterne = internesMois.filter(t => t.montant > 0).reduce((s, t) => s + t.montant, 0);
+  const envoyeInterne = -internesMois.filter(t => t.montant < 0).reduce((s, t) => s + t.montant, 0);
+  const soldeBanque = parBanque ? M.idsBanque.reduce((s, id) => s + F.valeur(M, id, F.dateFin(mk)), 0) : 0;
+  const optionsCat = sel => toutesCats.map(c => `<option ${c === sel ? 'selected' : ''}>${esc(c)}</option>`).join('') + '<option value="__nouvelle">+ Nouvelle catégorie…</option>';
+  const tableOps = list => list.length ? `<div class="table-wrap"><table class="ops-cat"><tbody>${[...list].sort((a, b) => b.date.localeCompare(a.date) || a.montant - b.montant).map(t => `
+    <tr><td class="muted nowrap">${D.fmt(t.date)}</td>
+      <td>${esc(t.libelle)}${t.categorie !== t.categorieOrigine ? ` <span class="tag" title="Catégorie d’origine : ${esc(t.categorieOrigine)}">corrigé</span>` : ''}${t.part ? ` <span class="tag" title="Compte partagé : montant total ${eur(t.montant / t.part, true)}">votre part ${pct(t.part)}</span>` : ''}</td>
+      <td class="num nowrap ${t.montant > 0 ? 'pos' : ''}">${eurSigned(t.montant, true)}</td>
+      <td><label class="select small-select"><span class="sr">Catégorie</span><select class="sel-cat" data-id="${esc(t.id)}">${optionsCat(t.categorie)}</select></label></td></tr>`).join('')}</tbody></table></div>`
+    : UI.empty('Aucune opération.');
+
+  const lignes = rows.map(r => {
+    const ratio = r.budget > 0 ? r.spent / r.budget : (r.spent > 0 ? Infinity : 0);
+    const w = r.budget > 0 ? Math.min(ratio, 1) * 100 : 100;
+    const ouverte = state.catOuverte === r.key;
+    const detail = opsMois.filter(t => normKey(t.categorie) === r.key);
+    return `<div class="cat-row cat-clic ${ouverte ? 'ouvert' : ''}" data-cat="${esc(r.key)}" tabindex="0" role="button" aria-expanded="${ouverte}" title="Voir les opérations">
+      <div class="cat-name"><span class="chevron" aria-hidden="true">▸</span> ${esc(r.label)}${r.horsBudget && !parBanque ? ' <span class="tag">hors budget</span>' : ''}</div>
+      <div class="cat-bar">
+        <div class="track"><div class="fill ${ratio > 1 ? 'over' : ''} ${r.horsBudget ? 'hb' : ''}" style="width:${w}%"></div>
+        ${isCurrent && r.budget > 0 ? `<div class="pace" style="left:${pace * 100}%"></div>` : ''}</div>
+      </div>
+      <div class="cat-val num"><strong>${eur(r.spent)}</strong> <span class="muted">/ ${r.budget ? eur(r.budget) : '—'}</span></div>
+      <div class="cat-status">${r.budget > 0 ? UI.status(ratio, isCurrent ? pace : 1) : '<span class="muted small">—</span>'}</div>
+    </div>
+    <div class="cat-detail" ${ouverte ? '' : 'hidden'}>${tableOps(detail)}</div>`;
+  }).join('');
+
+  // Catégories du mois absentes du budget : revenus et mouvements exclus (épargne, virements…), cliquables aussi
+  const clesBudget = new Set(rows.map(r => r.key));
+  const autres = new Map();
+  opsMois.forEach(t => {
+    const k = normKey(t.categorie);
+    if (clesBudget.has(k)) return;
+    const a = autres.get(k) || { key: k, label: t.categorie, net: 0, exclue: F.exclue(M, t.categorie) };
+    a.net += t.montant; autres.set(k, a);
+  });
+  const ligneAutre = a => {
+    const ouverte = state.catOuverte === a.key;
+    return `<div class="cat-row cat-clic ${ouverte ? 'ouvert' : ''}" data-cat="${esc(a.key)}" tabindex="0" role="button" aria-expanded="${ouverte}" title="Voir les opérations">
+      <div class="cat-name"><span class="chevron" aria-hidden="true">▸</span> ${esc(a.label)}</div>
+      <div class="cat-bar"></div>
+      <div class="cat-val num"><strong class="${a.net > 0 ? 'pos' : ''}">${eurSigned(a.net)}</strong></div>
+      <div class="cat-status"><span class="muted small">${a.exclue ? 'exclu' : a.net > 0 ? 'revenu' : ''}</span></div>
+    </div>
+    <div class="cat-detail" ${ouverte ? '' : 'hidden'}>${tableOps(opsMois.filter(t => normKey(t.categorie) === a.key))}</div>`;
+  };
+  const listeAutres = [...autres.values()].sort((x, y) => (x.exclue - y.exclue) || (y.net - x.net));
+  const lignesAutres = listeAutres.map(ligneAutre).join('');
+
+  const nbLoc = Corrections.nbLocales();
+  const barreCorr = `<div class="corr-bar">
+    <label class="check"><input type="checkbox" id="chk-libelle" ${state.toutLibelle !== false ? 'checked' : ''}> Appliquer un changement de catégorie à toutes les opérations du même libellé</label>
+    ${nbLoc ? `<span class="corr-status"><span class="status warning">● ${nbLoc} correction${nbLoc > 1 ? 's' : ''} gardée${nbLoc > 1 ? 's' : ''} dans ce navigateur</span>
+      ${M.source === 'github' ? '<button class="btn small primary" id="btn-corr-save">Enregistrer sur GitHub</button>' : ''}
+      <button class="btn small" id="btn-corr-dl">Télécharger categories.json</button>
+      <button class="btn small ghost" id="btn-corr-reset">Annuler</button></span>` : ''}
+    ${state.corrMsg ? `<span class="small ${state.corrMsg.ok ? 'pos' : 'neg'}">${esc(state.corrMsg.texte)}</span>` : ''}
+  </div>`;
+
+  // Historique sur 6 mois par catégorie
+  const hist = D.range(D.addMonths(mk, -5), mk);
+  const cats = new Map();
+  hist.forEach(m => F.lignesBudget(M, m).forEach(r => { if (!cats.has(r.key)) cats.set(r.key, r.label); }));
+  const histData = hist.map(m => new Map(F.lignesBudget(M, m).map(r => [r.key, r])));
+  const histRows = [...cats].map(([k, label]) => `<tr><th scope="row">${esc(label)}</th>${histData.map(h => {
+    const r = h.get(k);
+    if (!r || (!r.spent && !r.budget)) return '<td class="num muted">—</td>';
+    const over = r.budget > 0 && r.spent > r.budget;
+    return `<td class="num ${over ? 'over-cell' : ''}" title="Budget : ${r.budget ? eur(r.budget) : 'aucun'}">${over ? '<span class="ico">▲</span> ' : ''}${eur(r.spent)}</td>`;
+  }).join('')}</tr>`).join('');
+  const histTotals = hist.map(m => {
+    const t = F.depenses(M, m).total, b = F.budgetTotal(M, m);
+    if (parBanque) return `<td class="num">${eur(t)}</td>`;
+    return `<td class="num ${t > b ? 'over-cell' : ''}">${t > b ? '<span class="ico">▲</span> ' : ''}${eur(t)}<div class="muted small">/ ${eur(b)}</div></td>`;
+  }).join('');
+
+  const options = allMonths.map(m => `<option value="${m}" ${m === mk ? 'selected' : ''}>${D.monthLabel(m, true)}${m === cm ? ' (en cours)' : ''}</option>`).join('');
+
+  const nomsComptes = b => comptesAvecOps(Mtout, b).map(c => c.nom).join(', ');
+  const onglets = banques.length > 1 ? `<nav class="onglets" aria-label="Comptes">
+    ${['', ...banques].map(b => `<button type="button" class="onglet" data-banque="${esc(b)}" aria-pressed="${b === banque}" title="${b ? esc(nomsComptes(b)) : 'Virements entre vos comptes neutralisés'}">${b ? esc(b) : 'Tous les comptes'}</button>`).join('')}
+  </nav>` : '';
+  const kpisBudget = parBanque ? `
+        ${UI.kpi('Dépensé', eur(dep.total), `${esc(nomsComptes(banque))} · ${isCurrent ? `au ${D.fmt(today)}` : D.monthLabel(mk, true)}`)}
+        ${UI.kpi('Reçu de vos comptes', eur(recuInterne), 'virements depuis vos autres comptes')}
+        ${UI.kpi('Envoyé vers vos comptes', eur(envoyeInterne), 'virements vers vos autres comptes')}
+        ${UI.kpi(isCurrent ? 'Solde actuel' : 'Solde fin de mois', eur(soldeBanque), banque)}` : `
+        ${UI.kpi('Dépensé', eur(dep.total), isCurrent ? `au ${D.fmt(today)} · ${pct(pace)} du mois écoulé` : D.monthLabel(mk, true))}
+        ${UI.kpi('Budget', eur(bud), `${rows.filter(r => r.budget > 0).length} catégories`)}
+        ${UI.kpi(reste >= 0 ? 'Reste à dépenser' : 'Dépassement', `<span class="${reste < 0 ? 'neg' : ''}">${eur(Math.abs(reste))}</span>`, `${pct(bud ? dep.total / bud : null)} du budget consommé`)}
+        ${isCurrent
+          ? UI.kpi('Projection fin de mois', eur(projection), `d’après les 3 derniers mois · ${UI.delta(projection - bud, null, { invert: true, suffix: 'vs budget' })}`)
+          : UI.kpi('Écart au budget', UI.delta(dep.total - bud, bud, { invert: true }), 'positif = dépassement')}`;
+  const ecartInterne = recuInterne - envoyeInterne;
+  const noteInterne = !parBanque && internesMois.length ? `<p class="small muted note-interne">${internesMois.length} virements entre vos comptes neutralisés ce mois-ci (${eur(envoyeInterne)} envoyés, ${eur(recuInterne)} reçus${Math.abs(ecartInterne) >= 0.5 ? ` · écart ${eurSigned(ecartInterne)}, virement pas encore arrivé ou compte non suivi` : ''}).</p>` : '';
+
+  const html = `
+    <div class="page-h">
+      <h1>Dépenses</h1>
+      <label class="select"><span class="sr">Mois</span><select id="sel-mois">${options}</select></label>
+    </div>
+    ${onglets}
+    ${barreCorr}
+    <div class="grid">
+      <section class="card span-12"><div class="kpis four">${kpisBudget}
+      </div>
+      <div class="kpis four kpis-2">
+        ${UI.kpi('Revenus', eur(rev), isCurrent && !rev ? 'pas encore reçus ce mois-ci' : 'section Revenus du P&L')}
+        ${parBanque ? `
+        ${UI.kpi('Charges', eur(P.charges), 'nettes des remboursements')}
+        ${UI.kpi('Variation du solde', `<span class="${P.variation < 0 ? 'neg' : 'pos'}">${eurSigned(P.variation)}</span>`, 'toutes opérations, virements compris')}` : `
+        ${UI.kpi('Capacité d’épargne', `<span class="${epargne < 0 ? 'neg' : 'pos'}">${eurSigned(epargne)}</span>`, `revenus − charges (${eur(P.charges)})`)}
+        ${UI.kpi('Taux d’épargne', pct(taux), `moyenne des 12 derniers mois : ${pct(taux12)}`)}`}
+        ${UI.kpi('Versé sur l’épargne', eur(verse), 'net, vers livrets, assurance vie…')}
+      </div>${noteInterne}</section>
+
+      ${UI.card('Des revenus à l’épargne', UI.chart('ch-waterfall', 320), { sub: `${D.monthLabel(mk, true)} · revenus, puis chaque groupe de charges du P&L, jusqu’à ce qui reste`, cls: 'span-12' })}
+
+      ${UI.card('P&L mensuel', tablePnl(M, mk, state), { sub: '12 mois jusqu’au mois sélectionné · cliquez sur un groupe pour le détailler, sur un montant pour voir ses opérations', cls: 'span-12' })}
+
+      ${UI.card('Budget par catégorie', `<div class="cats">${lignes || UI.empty('Aucune dépense pour ce mois.')}</div>
+        ${lignesAutres ? `<h3 class="cats-titre">Revenus et mouvements hors budget</h3><div class="cats">${lignesAutres}</div>` : ''}
+        <p class="legend-note small muted">${isCurrent ? '<span class="pace-key"></span> repère : avancement du mois · ' : ''}Cliquez sur une catégorie pour voir ses opérations et en changer la catégorie.</p>`,
+        { sub: D.monthLabel(mk, true), cls: 'span-12' })}
+
+      ${UI.card(parBanque ? 'Dépenses mensuelles' : 'Dépenses mensuelles vs budget', UI.chart('ch-mois', 280), { sub: '12 derniers mois (hors virements d’épargne)', cls: 'span-7' })}
+      ${UI.card('Capacité d’épargne mensuelle', UI.chart('ch-epargne', 280), { sub: 'Revenus − charges du P&L, 12 derniers mois (taux au survol)', cls: 'span-5' })}
+
+      ${UI.card('Historique par catégorie', `<div class="table-wrap"><table class="hist">
+        <thead><tr><th>Catégorie</th>${hist.map(m => `<th class="num">${D.monthLabel(m)}</th>`).join('')}</tr></thead>
+        <tbody>${histRows}</tbody>
+        <tfoot><tr><th scope="row">Total</th>${histTotals}</tr></tfoot></table></div>
+        <p class="small muted"><span class="status critical">▲</span> montant supérieur au budget de la catégorie</p>`, { sub: '6 mois jusqu’au mois sélectionné', cls: 'span-12' })}
+    </div>`;
+
+  return { html, after() {
+    document.getElementById('sel-mois').addEventListener('change', e => { state.mois = e.target.value; App.render(); });
+    document.getElementById('chk-libelle').addEventListener('change', e => { state.toutLibelle = e.target.checked; });
+    document.querySelectorAll('.onglet').forEach(b => b.addEventListener('click', () => {
+      state.banque = b.dataset.banque; state.catOuverte = null; App.render({ garderScroll: true });
+    }));
+
+    // Clic sur une catégorie : affiche / masque ses opérations
+    document.querySelectorAll('.cat-clic').forEach(row => {
+      const basculer = () => {
+        const d = row.nextElementSibling, ouvrir = d.hidden;
+        document.querySelectorAll('.cat-detail').forEach(x => { x.hidden = true; x.previousElementSibling.classList.remove('ouvert'); x.previousElementSibling.setAttribute('aria-expanded', 'false'); });
+        d.hidden = !ouvrir; row.classList.toggle('ouvert', ouvrir); row.setAttribute('aria-expanded', String(ouvrir));
+        state.catOuverte = ouvrir ? row.dataset.cat : null;
+      };
+      row.addEventListener('click', basculer);
+      row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); basculer(); } });
+    });
+
+    // Changement de catégorie
+    const parId = new Map(Mtout.transactions.map(t => [t.id, t]));
+    document.querySelectorAll('.sel-cat').forEach(sel => sel.addEventListener('change', () => {
+      const t = parId.get(sel.dataset.id);
+      let cat = sel.value;
+      if (cat === '__nouvelle') {
+        cat = (prompt('Nom de la nouvelle catégorie :') || '').trim();
+        if (!cat) { sel.value = t.categorie; return; }
+      }
+      Corrections.changer(Mtout, t, cat, state.toutLibelle !== false);
+      state.corrMsg = null;
+      App.render({ garderScroll: true });
+    }));
+
+    // Enregistrement des corrections
+    const save = document.getElementById('btn-corr-save');
+    if (save) save.addEventListener('click', async () => {
+      save.disabled = true; save.textContent = 'Enregistrement…';
+      try {
+        const texte = Corrections.texte(Mtout);
+        await ghPut(App.getCfg(), 'categories.json', texte, 'Corrections de catégories');
+        Mtout.correctionsDepot = JSON.parse(texte);
+        Corrections.effacerLocales();
+        state.corrMsg = { ok: true, texte: '✓ Corrections enregistrées dans categories.json.' };
+      } catch (e) {
+        state.corrMsg = { ok: false, texte: 'Enregistrement impossible : ' + e.message + '. Les corrections restent dans ce navigateur ; vous pouvez aussi télécharger categories.json.' };
+      }
+      App.render({ garderScroll: true });
+    });
+    const dl = document.getElementById('btn-corr-dl');
+    if (dl) dl.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([Corrections.texte(Mtout)], { type: 'application/json' }));
+      a.download = 'categories.json'; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    const reset = document.getElementById('btn-corr-reset');
+    if (reset) reset.addEventListener('click', () => {
+      if (!confirm('Annuler les corrections non enregistrées ?')) return;
+      Corrections.effacerLocales(); Corrections.appliquer(Mtout); state.corrMsg = null;
+      App.render({ garderScroll: true });
+    });
+
+    // Waterfall : revenus, puis chaque groupe de charges du P&L (net), jusqu'à la capacité d'épargne
+    const groupesCharges = F.pnlPlan(M).groupes.find(g => g.section === 'Charges').groupes
+      .map(g => ({ label: g.nom, value: g.cats.reduce((s, c) => s + (P.parCat.get(normKey(c)) || 0), 0) }))
+      .filter(g => Math.abs(g.value) >= 0.5).sort((a, b) => a.value - b.value);
+    Charts.waterfall(document.getElementById('ch-waterfall'), [
+      { label: 'Revenus', value: rev, total: true },
+      ...groupesCharges,
+      { label: epargne >= 0 ? 'Capacité d’épargne' : 'Déficit', value: epargne, total: true, fin: true },
+    ]);
+
+    // P&L : ouvrir / fermer un groupe ; clic sur un montant de catégorie → ses opérations du mois
+    document.querySelectorAll('.pnl-groupe').forEach(tr => tr.addEventListener('click', () => {
+      const ouverts = state.pnlOuverts || (state.pnlOuverts = new Set()), k = tr.dataset.groupe;
+      ouverts.has(k) ? ouverts.delete(k) : ouverts.add(k);
+      App.render({ garderScroll: true });
+    }));
+    document.querySelectorAll('.pnl-cell[data-cat]').forEach(td => td.addEventListener('click', e => {
+      e.stopPropagation();
+      state.mois = td.dataset.mois; state.catOuverte = td.dataset.cat;
+      App.render();
+      const row = document.querySelector(`.cat-clic[data-cat="${CSS.escape(td.dataset.cat)}"]`);
+      if (row) row.scrollIntoView({ block: 'center' });
+    }));
+
+    const months = D.range(D.addMonths(cm, -11), cm);
+    Charts.barsWithLine(document.getElementById('ch-mois'), months.map(m => D.monthLabel(m)),
+      { label: 'Dépenses', data: months.map(m => F.depenses(M, m).total) },
+      parBanque ? null : { label: 'Budget', data: months.map(m => F.budgetTotal(M, m)) },
+      { highlightLast: true });
+    const pM = months.map(m => F.pnl(M, m)), revM = pM.map(p => p.revenus), epM = pM.map(p => p.resultat);
+    Charts.signedBars(document.getElementById('ch-epargne'), months.map(m => D.monthLabel(m)), 'Épargne', epM,
+      { label: ctx => ` Épargne : ${eurSigned(ctx.parsed.y)} · taux ${pct(revM[ctx.dataIndex] > 0 ? epM[ctx.dataIndex] / revM[ctx.dataIndex] : null)}` });
+  } };
+}
+
+/* ---------- Immobilier ---------- */
+function pageImmobilier(M, state) {
+  const biens = M.immobilier || [];
+  if (!biens.length) return { html: `<div class="page-h"><h1>Immobilier</h1></div>${UI.card('Aucun bien', UI.empty('Décrivez vos biens et leurs prêts dans immobilier.json (voir le README).'))}` };
+  const b = biens.find(x => x.id === state.bien) || biens[0];
+  const today = D.today(), q = Immo.part(b), ech = b.echeancier, pret = b.pret || {};
+  const valeur = Immo.valeur(b, today), crd = Immo.crd(b, today), net = valeur - crd;
+  const prix = Immo.prixAchat(b), cout = Immo.coutTotal(b), surface = parseNum(b.surface);
+  const estim = [...b.estimations].reverse().find(e => e.date <= today) || b.estimations[0];
+  const payees = ech.filter(e => e.date <= today), prochaine = ech.find(e => e.date > today), fin = ech[ech.length - 1];
+  const somme = (l, k) => l.reduce((s, e) => s + e[k], 0);
+  const montant = parseNum(pret.montant) || 0, totInt = somme(ech, 'interets'), totAss = somme(ech, 'assurance');
+  const intPayes = somme(payees, 'interets'), capRemb = somme(payees, 'capital'), assPayee = somme(payees, 'assurance');
+  const mensTotale = (prochaine || fin) ? (parseNum(pret.mensualite) || 0) + (prochaine || fin).assurance : 0;
+  const moi = (b.proprietaires || []).find(p => p.moi);
+
+  // Votre coût mensuel du logement : opérations des catégories de charges, à votre part pour le compte joint
+  // (12 derniers mois depuis l'achat)
+  const cats = new Set((b.categoriesCharges || []).map(normKey)), ops = opsVotrePart(M);
+  const cm = F.moisCourant(), mois12 = D.range(D.addMonths(cm, -12), D.addMonths(cm, -1)).filter(m => m >= D.monthKey(b.dateAchat));
+  const parMois = mois12.map(m => -ops.filter(t => D.monthKey(t.date) === m && cats.has(normKey(t.categorie)))
+    .reduce((s, t) => s + t.montant, 0));
+  // Charges annuelles du bien pas (encore) visibles dans les comptes, comme la taxe foncière : votre part, au mois
+  const annuelles = (b.chargesAnnuelles || []).filter(c => parseNum(c.montant));
+  const parMoisAnnuelles = annuelles.reduce((s, c) => s + parseNum(c.montant), 0) * q / 12;
+  const moyLogement = (parMois.length ? parMois.reduce((s, v) => s + v, 0) / parMois.length : 0) + parMoisAnnuelles;
+
+  // Échéancier annuel
+  const annees = [...new Set(ech.map(e => e.date.slice(0, 4)))];
+  const anneeCourante = today.slice(0, 4);
+  const lignesAn = annees.map(a => {
+    const l = ech.filter(e => e.date.startsWith(a));
+    return { a, n: l.length, capital: somme(l, 'capital'), interets: somme(l, 'interets'), assurance: somme(l, 'assurance'), crd: l[l.length - 1].crd };
+  });
+  const rowsAn = lignesAn.map(r => `<tr class="${r.a === anneeCourante ? 'ligne-courante' : r.a < anneeCourante ? 'muted' : ''}">
+    <td>${r.a}</td><td class="num">${r.n}</td><td class="num">${eur(r.capital)}</td><td class="num">${eur(r.interets)}</td>
+    <td class="num">${eur(r.assurance)}</td><td class="num"><strong>${eur(r.crd)}</strong></td></tr>`).join('');
+
+  const acquisition = (b.acquisition || []).map(a => `<tr><td>${esc(a.poste)}${a.detail ? `<div class="muted small">${esc(a.detail)}</div>` : ''}</td><td class="num">${eur(a.montant)}</td></tr>`).join('');
+  const apports = (b.proprietaires || []).reduce((s, p) => s + (parseNum(p.apport) || 0), 0);
+  const financement = `${(b.proprietaires || []).map(p => `<tr><td>Apport ${esc(p.nom)}</td><td class="num">${eur(p.apport)}</td></tr>`).join('')}
+    ${montant ? `<tr><td>${esc(pret.nom || 'Prêt')}</td><td class="num">${eur(montant)}</td></tr>` : ''}`;
+
+  const selectHtml = biens.length > 1 ? `<label class="select"><span class="sr">Bien</span><select id="sel-bien">${biens.map(x => `<option value="${esc(x.id)}" ${x === b ? 'selected' : ''}>${esc(x.nom)}</option>`).join('')}</select></label>` : '';
+  const pv = valeur - prix;
+
+  const html = `
+    <div class="page-h"><h1>Immobilier</h1>${selectHtml}
+      <p class="muted">${esc(b.nom)} · ${esc(b.adresse || '')} · acheté le ${D.fmt(b.dateAchat)}</p></div>
+    <div class="grid">
+      <section class="card hero span-12">
+        <div class="hero-main">
+          <div class="kpi-label">Valeur nette${q < 1 ? ` · votre part (${pct(q)})` : ''}</div>
+          <div class="hero-value">${eur(net * q)}</div>
+          <div class="hero-deltas">
+            <div><span class="muted">Bien entier :</span> ${eur(net)} <span class="muted">(${eur(valeur)} − ${eur(crd)} de crédit)</span></div>
+            <div>${UI.delta(net * q - (moi ? parseNum(moi.apport) || 0 : 0))} <span class="muted">par rapport à votre apport${moi ? ` (${eur(moi.apport)})` : ''}</span></div>
+          </div>
+        </div>
+        <div class="kpis">
+          ${UI.kpi('Valeur estimée', eur(valeur), `${estim?.min && estim?.max ? `entre ${eur(estim.min)} et ${eur(estim.max)} · ` : ''}${esc(estim?.source || '')}${estim?.date ? ` (${D.fmt(estim.date)})` : ''}`)}
+          ${UI.kpi('Capital restant dû', eur(crd), `${pct(montant ? capRemb / montant : null)} remboursé · fin ${fin ? D.fmt(fin.date) : '—'}`)}
+          ${UI.kpi('Plus-value latente', UI.delta(pv), `vs prix d’achat (${eur(prix)}) · ${UI.delta(valeur - cout)} vs coût total`)}
+        </div>
+      </section>
+
+      <section class="card span-12"><div class="kpis four">
+        ${UI.kpi('Mensualité', eur(mensTotale, true), `${eur(pret.mensualite, true)} de prêt + ${eur((prochaine || fin)?.assurance, true)} d’assurance`)}
+        ${UI.kpi('Prochaine échéance', prochaine ? D.fmt(prochaine.date) : '—', prochaine ? `n° ${prochaine.n}/${ech.length} · ${eur(prochaine.capital, true)} de capital, ${eur(prochaine.interets, true)} d’intérêts` : 'prêt remboursé')}
+        ${UI.kpi('Intérêts payés', eur(intPayes), `${eur(totInt - intPayes)} restant à payer sur ${eur(totInt)}`)}
+        ${UI.kpi('Votre coût du logement', eur(moyLogement), `par mois : moyenne sur ${parMois.length} mois de votre part (crédit, assurance, charges)${annuelles.length ? ` + ${annuelles.map(c => `${esc(c.poste.toLowerCase())} ${eur(parseNum(c.montant) * q / 12)}`).join(', ')}` : ''}`)}
+      </div></section>
+
+      ${UI.card('Valeur, crédit et valeur nette', UI.chart('ch-immo', 300), { sub: 'Bien entier, de l’achat à la fin du prêt (valeur estimée constante après la dernière estimation)', cls: 'span-8' })}
+      ${UI.card('Le bien', `<dl class="facts">
+        <div><dt>Description</dt><dd>${esc(b.description || '—')}</dd></div>
+        <div><dt>Surface Carrez</dt><dd>${surface ? surface.toLocaleString('fr-FR') + ' m²' : '—'}</dd></div>
+        <div><dt>Usage</dt><dd>${esc(b.usage || '—')}</dd></div>
+        ${estim?.detail ? `<div><dt>Estimation</dt><dd>${esc(estim.detail)}</dd></div>` : ''}
+        ${annuelles.map(c => `<div><dt>${esc(c.poste)}</dt><dd>${eur(c.montant)} par an${c.detail ? ` <span class="muted">(${esc(c.detail)})</span>` : ''}</dd></div>`).join('')}
+        <div><dt>Propriétaires</dt><dd>${(b.proprietaires || []).map(p => `${esc(p.nom)} ${pct(parseNum(p.part))}`).join(' · ') || '—'}</dd></div>
+        <div><dt>Notaire</dt><dd>${esc(b.notaire || '—')}</dd></div>
+        <div><dt>Prêt</dt><dd>${eur(montant)} sur ${Math.round((parseNum(pret.duree) || 0) / 12)} ans à ${String(pret.taux ?? '—').replace('.', ',')} % (TAEG ${String(pret.taeg ?? '—').replace('.', ',')} %) · ${esc(pret.garantie || '')}</dd></div>
+        <div><dt>Assurance</dt><dd>${esc(pret.assurance?.assureur || '—')}${pret.assurance?.quotite ? ` · ${esc(pret.assurance.quotite)}` : ''}</dd></div>
+      </dl>`, { cls: 'span-4' })}
+
+      ${UI.card('Remboursement par année', UI.chart('ch-immo-an', 280), { sub: 'Capital, intérêts et assurance (les deux emprunteurs)', cls: 'span-7' })}
+      ${UI.card('Coût d’acquisition', `<div class="table-wrap"><table>
+        <tbody>${acquisition}</tbody>
+        <tfoot><tr><td>Coût total</td><td class="num">${eur(cout)}</td></tr></tfoot></table></div>
+        <h3 class="cats-titre">Financement</h3>
+        <div class="table-wrap"><table><tbody>${financement}</tbody>
+        <tfoot><tr><td>Total</td><td class="num">${eur(apports + montant)}</td></tr></tfoot></table></div>
+        <p class="small muted">Coût du crédit sur toute sa durée : ${eur(totInt)} d’intérêts et ${eur(totAss)} d’assurance.</p>`, { cls: 'span-5' })}
+
+      ${UI.card('Votre coût mensuel du logement', parMois.length ? UI.chart('ch-immo-mois', 240) : UI.empty('Pas encore de mois complet depuis l’achat.'),
+        { sub: `Catégories ${[...(b.categoriesCharges || [])].map(esc).join(', ')} : vos comptes, et votre part (${pct(q)}) des opérations du compte joint.`, cls: 'span-12' })}
+
+      ${UI.card('Échéancier', `<div class="table-wrap"><table>
+        <thead><tr><th>Année</th><th class="num">Échéances</th><th class="num">Capital</th><th class="num">Intérêts</th><th class="num">Assurance</th><th class="num">Restant dû fin d’année</th></tr></thead>
+        <tbody>${rowsAn}</tbody>
+        <tfoot><tr><td>Total</td><td class="num">${ech.length}</td><td class="num">${eur(somme(ech, 'capital'))}</td><td class="num">${eur(totInt)}</td><td class="num">${eur(totAss)}</td><td></td></tr></tfoot></table></div>
+        <p class="small muted">Calculé à partir de l’offre de prêt (mensualités constantes, intérêts arrondis au centime) ; ${payees.length} échéance${payees.length > 1 ? 's' : ''} payée${payees.length > 1 ? 's' : ''} au ${D.fmt(today)} (${eur(assPayee)} d’assurance). Pour mettre à jour la valeur du bien, ajoutez une estimation datée dans <code>immobilier.json</code>.</p>`,
+        { sub: 'Prêt et assurance des deux emprunteurs, par année civile', cls: 'span-12' })}
+    </div>`;
+
+  return { html, after() {
+    const sel = document.getElementById('sel-bien');
+    if (sel) sel.addEventListener('change', e => { state.bien = e.target.value; App.render(); });
+    // Un point par mois, de l'achat à la dernière échéance
+    const mois = D.range(D.monthKey(b.dateAchat), fin ? D.monthKey(fin.date) : cm);
+    const dates = mois.map(m => m === cm ? today : D.endOfMonth(m));
+    const v = dates.map(d => Immo.valeur(b, d)), c = dates.map(d => Immo.crd(b, d));
+    Charts.line(document.getElementById('ch-immo'), mois.map(m => D.monthLabel(m)), [
+      { label: 'Valeur nette', data: v.map((x, i) => x - c[i]) },
+      { label: 'Valeur estimée', data: v, dash: [5, 4] },
+      { label: 'Capital restant dû', data: c },
+    ]);
+    const i = lignesAn.findIndex(r => r.a === anneeCourante);
+    Charts.stackedBars(document.getElementById('ch-immo-an'), lignesAn.map(r => r.a), [
+      { label: 'Capital', data: lignesAn.map(r => r.capital) },
+      { label: 'Intérêts', data: lignesAn.map(r => r.interets) },
+      { label: 'Assurance', data: lignesAn.map(r => r.assurance) },
+    ], { highlight: i });
+    if (parMois.length) Charts.barsWithLine(document.getElementById('ch-immo-mois'), mois12.map(m => D.monthLabel(m)),
+      { label: 'Logement (votre part)', data: parMois }, { label: 'Votre part de la mensualité', data: mois12.map(() => mensTotale * q) });
+  } };
+}
+
+/* ---------- Épargne ---------- */
+// Cellule colorée selon le signe et l'ampleur d'un rendement (pôles divergents, texte toujours en encre normale).
+function cellRendement(p, title = '') {
+  if (p == null || !isFinite(p)) return '<td class="num muted">—</td>';
+  const force = Math.round(Math.min(Math.abs(p) / 0.06, 1) * 38);
+  const col = p >= 0 ? 'var(--div-pos)' : 'var(--div-neg)';
+  return `<td class="num heat" style="background:color-mix(in srgb, ${col} ${force}%, transparent)" title="${esc(title)}">${pctSigned(p)}</td>`;
+}
+
+function tableRendements(M, ids) {
+  const mensuels = F.rendementsMensuels(M, ids);
+  const annuels = F.rendementsAnnuels(mensuels);
+  const parMois = new Map(mensuels.map(r => [r.mk, r]));
+  const annees = [...annuels.keys()].sort().reverse();
+  if (!annees.length) return UI.empty('Pas encore assez d’historique (il faut au moins deux relevés mensuels).');
+  const noms = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const lignes = annees.map(y => {
+    const a = annuels.get(y);
+    const cells = noms.map((_, i) => { const r = parMois.get(`${y}-${pad(i + 1)}`); return cellRendement(r?.pct, r?.gain != null ? `Gain : ${eurSigned(r.gain)}` : ''); }).join('');
+    return `<tr><th scope="row">${y}${y === F.moisCourant().slice(0, 4) ? ' <span class="muted small">(en cours)</span>' : ''}</th>${cells}
+      <td class="num strong-cell">${pctSigned(a.indice - 1)}<div class="small">${UI.delta(a.gain)}</div></td></tr>`;
+  }).join('');
+  return `<div class="table-wrap"><table class="heat-table">
+    <thead><tr><th></th>${noms.map(n => `<th class="num">${n}</th>`).join('')}<th class="num">Année</th></tr></thead>
+    <tbody>${lignes}</tbody></table></div>
+    <p class="small muted">Rendement de chaque mois hors versements ; l’année chaîne les mois (performance « time-weighted »). Survolez une case pour le gain en euros.</p>`;
+}
+
+function cartesPositions(M, compte, today) {
+  const cm = F.moisCourant();
+  const lignes = F.positionsAt(M, compte.id, today).filter(p => p.quantite > 0);
+  if (!lignes.length) return '';
+  const total = lignes.reduce((s, p) => s + p.quantite * p.cours, 0);
+  const dPrev = D.endOfMonth(D.addMonths(cm, -1)), dYtd = (Number(cm.slice(0, 4)) - 1) + '-12-31', d12 = D.endOfMonth(D.addMonths(cm, -12));
+  const varDepuis = (p, d) => { const c0 = F.coursAt(M, compte.id, p.titre, d); return c0 ? p.cours / c0 - 1 : null; };
+  let pvTotal = 0, coutTotal = 0, divTotal = 0;
+  const avecOps = lignes.some(p => F.historiqueLigne(M, compte.id, p.titre));
+  const nbCols = avecOps ? 13 : 11;
+  const libOp = { achat: 'Achat', vente: 'Vente', dividende: 'Dividende', attribution: 'Attribution gratuite' };
+  const rows = lignes.sort((a, b) => b.quantite * b.cours - a.quantite * a.cours).map((p, i) => {
+    const val = p.quantite * p.cours;
+    const cout = p.pru != null ? p.quantite * p.pru : null;
+    if (cout != null) { pvTotal += val - cout; coutTotal += cout; }
+    const h = avecOps ? F.historiqueLigne(M, compte.id, p.titre) : null;
+    if (h) divTotal += h.dividendes;
+    const debut = h?.depuis ? (h.avantDebut ? `avant le ${D.fmt(h.depuis)}` : D.fmt(h.depuis)) : '—';
+    const detail = h ? `<tr class="ligne-detail" id="det-${esc(compte.id)}-${i}" hidden><td colspan="${nbCols}">
+      ${h.avantDebut ? `<p class="small muted">Ligne déjà détenue au ${D.fmt(h.depuis)}, début de l’historique des opérations : les achats antérieurs n’y figurent pas.</p>` : ''}
+      <table class="ops"><thead><tr><th>Date</th><th>Opération</th><th class="num">Qté</th><th class="num">Prix</th><th class="num">Montant</th></tr></thead>
+      <tbody>${h.ops.slice().reverse().map(o => `<tr><td>${D.fmt(o.date)}</td><td>${libOp[o.operation]}</td>
+        <td class="num">${o.operation === 'dividende' ? '' : o.quantite.toLocaleString('fr-FR')}</td>
+        <td class="num">${o.prix ? eur(o.prix, true) : ''}</td>
+        <td class="num">${o.montant ? eurSigned(o.montant) : ''}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">Aucune opération depuis le début de l’historique.</td></tr>`}</tbody></table>
+      </td></tr>` : '';
+    return `<tr${h ? ` class="ligne-clic" data-detail="det-${esc(compte.id)}-${i}" tabindex="0" title="Afficher les opérations"` : ''}>
+      <td>${h ? '<span class="chevron" aria-hidden="true">▸</span> ' : ''}<strong>${esc(p.titre)}</strong>${p.ticker ? ` <span class="muted small">${esc(p.ticker)}</span>` : ''}</td>
+      ${avecOps ? `<td class="nowrap">${debut}</td>` : ''}
+      <td class="num">${p.quantite.toLocaleString('fr-FR')}</td>
+      <td class="num">${p.pru != null ? eur(p.pru, true) : '—'}</td>
+      <td class="num">${eur(p.cours, true)}</td>
+      <td class="num">${eur(val)}</td>
+      <td class="num">${cout != null ? UI.delta(val - cout) : '<span class="muted">—</span>'}</td>
+      <td class="num">${cout ? pctSigned(val / cout - 1) : '<span class="muted">—</span>'}</td>
+      ${avecOps ? `<td class="num">${h?.dividendes ? eur(h.dividendes) : '<span class="muted">—</span>'}</td>` : ''}
+      <td class="num muted">${pct(val / total)}</td>
+      <td class="num">${pctSigned(varDepuis(p, dPrev))}</td>
+      <td class="num">${pctSigned(varDepuis(p, dYtd))}</td>
+      <td class="num">${pctSigned(varDepuis(p, d12))}</td>
+    </tr>${detail}`;
+  }).join('');
+
+  const mois = D.range(D.addMonths(cm, -11), cm);
+  const heat = lignes.map(p => `<tr><th scope="row">${esc(p.titre)}</th>${mois.map(m => {
+    const c1 = F.coursAt(M, compte.id, p.titre, F.dateFin(m)), c0 = F.coursAt(M, compte.id, p.titre, D.endOfMonth(D.addMonths(m, -1)));
+    return cellRendement(c0 && c1 ? c1 / c0 - 1 : null, c1 ? `Cours : ${eur(c1, true)}` : '');
+  }).join('')}</tr>`).join('');
+
+  return `
+    ${UI.card(`Lignes — ${esc(compte.nom)}`, `<div class="table-wrap"><table>
+      <thead><tr><th>Ligne</th>${avecOps ? '<th>1er achat</th>' : ''}<th class="num">Qté</th><th class="num">PRU</th><th class="num">Cours</th><th class="num">Valorisation</th><th class="num">+/- value</th><th class="num">vs PRU</th>${avecOps ? '<th class="num">Dividendes</th>' : ''}<th class="num">Poids</th><th class="num">1 mois</th><th class="num">Depuis 1er janv.</th><th class="num">12 mois</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="${avecOps ? 5 : 4}">Total titres</td><td class="num">${eur(total)}</td><td class="num">${UI.delta(pvTotal)}</td><td class="num">${coutTotal ? pctSigned(pvTotal / coutTotal) : '—'}</td>${avecOps ? `<td class="num">${eur(divTotal)}</td>` : ''}<td colspan="4"></td></tr></tfoot>
+      </table></div>
+      <p class="small muted">« +/- value » : valorisation moins prix de revient (PRU × quantité). « vs PRU » : cours actuel comparé à votre prix de revient unitaire. Les colonnes 1 mois / 1er janv. / 12 mois comparent les cours (hors dividendes), quelle que soit la date d’achat.
+      ${avecOps ? 'Cliquez sur une ligne pour voir ses achats, ventes et dividendes.' : 'Dates d’achat non disponibles pour ce contrat : les versements sont répartis automatiquement entre les fonds.'}</p>`,
+      { sub: `relevé du ${D.fmt(lignes[0].date)}`, cls: 'span-12' })}
+    ${UI.card(`Variation mensuelle des cours — ${esc(compte.nom)}`, `<div class="table-wrap"><table class="heat-table">
+      <thead><tr><th>Ligne</th>${mois.map(m => `<th class="num">${D.monthLabel(m)}</th>`).join('')}</tr></thead>
+      <tbody>${heat}</tbody></table></div>`, { sub: '12 derniers mois', cls: 'span-12' })}`;
+}
+
+function pageEpargne(M, state) {
+  const today = D.today(), cm = F.moisCourant();
+  const comptes = M.comptes.filter(c => ['epargne', 'placements'].includes(F.classe(c)));
+  if (!comptes.length) return { html: `<div class="page-h"><h1>Épargne & placements</h1></div>${UI.card('Aucun compte', UI.empty('Ajoutez des comptes de type livret, assurance-vie, pea… dans comptes.json.'))}` };
+  // Les comptes clôturés restent dans les totaux et l'historique, mais ne sont plus sélectionnables
+  const ouverts = comptes.filter(c => F.ouvert(c, today));
+  const choix = ouverts.find(c => c.id === state.compteEpargne);
+  const ids = choix ? [choix.id] : comptes.map(c => c.id);
+  const selectHtml = ouverts.length > 1 ? `<label class="select"><span class="sr">Compte</span><select id="sel-compte">
+    <option value="">Tous les comptes</option>${ouverts.map(c => `<option value="${esc(c.id)}" ${choix === c ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select></label>` : '';
+
+  const total = ids.reduce((s, id) => s + F.valeur(M, id, today), 0);
+  // Plus-values : uniquement sur les comptes dont les versements sont renseignés
+  const idsV = ids.filter(id => F.hasVersements(M, id));
+  const vers = idsV.reduce((s, id) => s + F.versements(M, id, today), 0);
+  const pv = idsV.length ? idsV.reduce((s, id) => s + F.valeur(M, id, today), 0) - vers : null;
+  const horsV = ids.length - idsV.length;
+  const d12 = D.endOfMonth(D.addMonths(cm, -12)), dYtd = (Number(cm.slice(0, 4)) - 1) + '-12-31';
+  const p12 = F.perf(M, ids, d12, today), pYtd = F.perf(M, ids, dYtd, today);
+  // TRI annualisé : n'a de sens qu'au-delà de quelques mois d'historique
+  const triOk = t => t && t.annees >= 0.25 ? t : null;
+  const triCell = t => t ? pctSigned(t.taux) : '<span class="muted">—</span>';
+  const tri = triOk(F.tri(M, ids, null, today)), tri12 = triOk(F.tri(M, ids, d12, today));
+
+  const totalTous = comptes.reduce((s, c) => s + F.valeur(M, c.id, today), 0);
+  const rows = [...ouverts, ...comptes.filter(c => !F.ouvert(c, today))].map(c => {
+    const v = F.valeur(M, c.id, today), f = F.versements(M, c.id, today), known = F.hasVersements(M, c.id);
+    const p = F.perf(M, [c.id], d12, today), t = triOk(F.tri(M, [c.id], null, today));
+    return `<tr${F.ouvert(c, today) ? '' : ' class="muted"'}>
+      <td><strong>${esc(c.nom)}</strong><div class="muted small">${esc(c.banque)}${c.ferme ? `${c.banque ? ' · ' : ''}clôturé le ${D.fmt(c.ferme)}` : ''}</div></td>
+      <td>${esc(typeInfo(c.type).label)}${c.taux != null ? ` <span class="muted small">${String(c.taux).replace('.', ',')} %</span>` : ''}</td>
+      <td class="num">${eur(v)}</td>
+      <td class="num">${known ? eur(f) : '<span class="muted">—</span>'}</td>
+      <td class="num">${known ? UI.delta(v - f) : '<span class="muted">—</span>'}</td>
+      <td class="num">${known && f > 0 ? pctSigned((v - f) / f) : '<span class="muted">—</span>'}</td>
+      <td class="num">${known ? pctSigned(p.pct) : '<span class="muted">—</span>'}</td>
+      <td class="num" title="${t ? `depuis le ${D.fmt(t.debut)}` : ''}">${triCell(t)}</td>
+      <td class="num muted">${pct(totalTous ? v / totalTous : null)}</td>
+    </tr>`;
+  }).join('');
+
+  // Répartition : par type de support, ou par ligne quand un seul compte détaillé est sélectionné
+  const parType = new Map();
+  const lignesSel = choix ? F.positionsAt(M, choix.id, today).filter(p => p.quantite > 0) : [];
+  if (lignesSel.length) lignesSel.forEach(p => parType.set(p.titre, p.quantite * p.cours));
+  else comptes.filter(c => ids.includes(c.id)).forEach(c => { const l = typeInfo(c.type).label; parType.set(l, (parType.get(l) || 0) + F.valeur(M, c.id, today)); });
+  const totalAlloc = [...parType.values()].reduce((s, v) => s + v, 0);
+  const alloc = [...parType].sort((a, b) => b[1] - a[1]).map(([l, v]) => `
+    <div class="alloc-row"><div class="row-between"><span>${esc(l)}</span><span><strong>${eur(v)}</strong> <span class="muted">${pct(totalAlloc ? v / totalAlloc : null)}</span></span></div>
+    <div class="track"><div class="fill" style="width:${totalAlloc ? v / totalAlloc * 100 : 0}%"></div></div></div>`).join('');
+
+  const html = `
+    <div class="page-h"><h1>Épargne & placements</h1>${selectHtml}<p class="muted">${choix ? esc(choix.nom) : `${comptes.length} compte${comptes.length > 1 ? 's' : ''}`} · situation au ${D.fmt(today)}</p></div>
+    <div class="grid">
+      <section class="card span-12"><div class="kpis four">
+        ${UI.kpi(choix ? 'Valorisation' : 'Encours total', eur(total), choix ? esc(typeInfo(choix.type).label) : `dont ${eur(comptes.filter(c => F.classe(c) === 'placements').reduce((s, c) => s + F.valeur(M, c.id, today), 0))} en placements`)}
+        ${UI.kpi('Plus-values latentes', pv == null ? '—' : UI.delta(pv), pv == null ? 'versements non renseignés' : `sur ${eur(vers)} versés · ${pctSigned(vers ? pv / vers : null)}${horsV ? ` · hors ${horsV} compte${horsV > 1 ? 's' : ''} sans versements` : ''}`)}
+        ${UI.kpi('Performance 12 mois', pctSigned(p12.pct), p12.pct == null ? 'historique insuffisant' : `${UI.delta(p12.gain)} · ${eur(p12.flux)} versés`)}
+        ${UI.kpi('Depuis le 1er janvier', pctSigned(pYtd.pct), pYtd.pct == null ? 'historique insuffisant' : `${UI.delta(pYtd.gain)} · ${eur(pYtd.flux)} versés`)}
+        ${UI.kpi('TRI annualisé', tri ? pctSigned(tri.taux) : '—', tri ? `depuis le ${D.fmt(tri.debut)}${tri12 ? ` · ${pctSigned(tri12.taux)} sur 12 mois` : ''}` : 'versements non renseignés ou historique insuffisant')}
+      </div></section>
+
+      ${choix ? cartesPositions(M, choix, today) : ''}
+
+      ${UI.card(idsV.length ? 'Valeur vs versements cumulés' : 'Évolution de la valeur', UI.chart('ch-valeur', 300), { sub: idsV.length ? `L’écart entre les deux courbes correspond aux gains accumulés${horsV ? ' (comptes avec versements renseignés)' : ''}` : 'Versements non renseignés', cls: 'span-8' })}
+      ${UI.card('Répartition', `<div class="alloc">${alloc}</div>`, { sub: lignesSel.length ? 'par ligne' : 'par type de support', cls: 'span-4' })}
+
+      ${UI.card('Performance mensuelle et annuelle', tableRendements(M, ids), { sub: choix ? esc(choix.nom) : 'Ensemble de l’épargne et des placements', cls: 'span-12' })}
+
+      ${choix ? '' : comptes.map(c => cartesPositions(M, c, today)).join('')}
+
+      ${UI.card('Détail par compte', `<div class="table-wrap"><table>
+        <thead><tr><th>Compte</th><th>Type</th><th class="num">Valeur</th><th class="num">Versé</th><th class="num">Plus-value</th><th class="num">Perf. totale</th><th class="num">Perf. 12 mois</th><th class="num">TRI annuel</th><th class="num">Poids</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="2">Total</td><td class="num">${eur(total)}</td><td class="num">${idsV.length ? eur(vers) : '—'}</td><td class="num">${pv == null ? '—' : UI.delta(pv)}</td><td class="num">${pv != null && vers ? pctSigned(pv / vers) : '—'}</td><td class="num">${pctSigned(p12.pct)}</td><td class="num">${triCell(tri)}</td><td></td></tr></tfoot>
+        </table></div>
+        <p class="small muted">Performance 12 mois calculée hors versements (méthode de Dietz simplifiée). TRI : taux de rendement interne annualisé depuis le premier relevé du compte, qui tient compte de la date de chaque versement et retrait (relevés mensuels). « — » : versements non renseignés dans soldes.csv ou moins de 3 mois d’historique. PEA : versements estimés à partir du prix de revient ; fonds monétaire Revolut : historique reconstitué.</p>`, { cls: 'span-12' })}
+
+      ${UI.card('Gains mensuels', UI.chart('ch-gains', 240), { sub: 'Variation de valeur hors versements, 12 derniers mois', cls: choix ? 'span-12' : 'span-6' })}
+      ${choix ? '' : UI.card('Encours par compte', UI.chart('ch-comptes', 240), { sub: '24 derniers mois', cls: 'span-6' })}
+    </div>`;
+
+  return { html, after() {
+    const sel = document.getElementById('sel-compte');
+    if (sel) sel.addEventListener('change', e => { state.compteEpargne = e.target.value; App.render(); });
+    // Clic (ou Entrée) sur une ligne : affiche / masque ses opérations
+    document.querySelectorAll('tr.ligne-clic').forEach(tr => {
+      const basculer = () => { const d = document.getElementById(tr.dataset.detail); d.hidden = !d.hidden; tr.classList.toggle('ouvert', !d.hidden); };
+      tr.addEventListener('click', basculer);
+      tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); basculer(); } });
+    });
+    const m24 = F.mois(M, 24), lab24 = m24.map(m => D.monthLabel(m));
+    // Comparaison valeur / versements sur les seuls comptes dont les versements sont connus,
+    // à partir du premier relevé de ces comptes
+    const idsC = idsV.length ? idsV : ids;
+    const mC = m24.filter(m => idsC.some(id => F.snap(M, id, F.dateFin(m))));
+    const cv = document.getElementById('ch-valeur');
+    if (mC.length < 2) cv.parentElement.innerHTML = UI.empty('La courbe apparaîtra à partir du deuxième relevé mensuel.');
+    else Charts.line(cv, mC.map(m => D.monthLabel(m)), [
+      { label: 'Valeur', data: mC.map(m => idsC.reduce((s, id) => s + F.valeur(M, id, F.dateFin(m)), 0)) },
+      ...(idsV.length ? [{ label: 'Versements cumulés', data: mC.map(m => idsV.reduce((s, id) => s + F.versements(M, id, F.dateFin(m)), 0)), color: Charts.colors().text2, dash: [5, 4] }] : []),
+    ]);
+    const m12 = D.range(D.addMonths(cm, -11), cm);
+    Charts.signedBars(document.getElementById('ch-gains'), m12.map(m => D.monthLabel(m)), 'Gain',
+      m12.map(m => F.perf(M, ids, D.endOfMonth(D.addMonths(m, -1)), F.dateFin(m)).gain));
+    if (choix) return;
+    const top = comptes.slice(0, 7);
+    const series = top.map(c => ({ label: c.nom, data: m24.map(m => F.valeur(M, c.id, F.dateFin(m))) }));
+    if (comptes.length > 7) series.push({ label: 'Autres', data: m24.map(m => comptes.slice(7).reduce((s, c) => s + F.valeur(M, c.id, F.dateFin(m)), 0)) });
+    Charts.line(document.getElementById('ch-comptes'), lab24, series);
+  } };
+}
+
+/* ---------- Paramètres ---------- */
+function pageParametres(M, state) {
+  const cfg = App.getCfg();
+  const warn = M?.warnings?.length ? `<div class="alert warning"><strong>${M.warnings.length} avertissement(s) au chargement :</strong><ul>${M.warnings.slice(0, 15).map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '';
+  const err = state.error ? `<div class="alert critical"><strong>Échec du chargement :</strong> ${esc(state.error)}</div>` : '';
+  const ok = M && !state.error ? `<div class="alert good">✓ Données chargées (${M.source === 'demo' ? 'mode démo' : `${esc(cfg.owner)}/${esc(cfg.repo)}`}) : ${M.comptes.length} comptes, ${M.soldes.length} soldes, ${M.transactions.length} opérations, ${M.positions.length} lignes de positions.</div>` : '';
+
+  const html = `
+    <div class="page-h"><h1>Paramètres</h1></div>
+    <div class="grid">
+      ${UI.card('Connexion au dépôt GitHub', `
+        ${err}${ok}${warn}
+        <form id="cfg-form" class="form" autocomplete="off">
+          <div class="form-row">
+            <label>Propriétaire<input name="owner" required value="${esc(cfg.owner || '')}" placeholder="mon-pseudo"></label>
+            <label>Dépôt<input name="repo" required value="${esc(cfg.repo || '')}" placeholder="mes-finances"></label>
+          </div>
+          <div class="form-row">
+            <label>Branche<input name="branche" value="${esc(cfg.branche || 'main')}"></label>
+            <label>Dossier des données<input name="dossier" value="${esc(cfg.dossier ?? 'data')}"></label>
+          </div>
+          <label>Token GitHub (fine-grained, lecture seule)
+            <input name="token" type="password" value="${esc(cfg.token || '')}" placeholder="github_pat_…" spellcheck="false">
+          </label>
+          <label class="check"><input type="checkbox" name="remember" ${cfg.remember ? 'checked' : ''}> Mémoriser le token sur cet appareil (sinon il est oublié à la fermeture de l’onglet)</label>
+          <div class="btns">
+            <button class="btn primary" type="submit">Enregistrer et charger</button>
+            <button class="btn" type="button" id="btn-demo">Utiliser les données de démo</button>
+            <button class="btn ghost" type="button" id="btn-forget">Oublier le token</button>
+          </div>
+        </form>`, { sub: 'Le token reste dans votre navigateur ; il n’est envoyé qu’à api.github.com.', cls: 'span-7' })}
+
+      ${UI.card('Créer le token', `
+        <ol class="steps">
+          <li>GitHub → <em>Settings</em> → <em>Developer settings</em> → <em>Personal access tokens</em> → <strong>Fine-grained tokens</strong> → <em>Generate new token</em>.</li>
+          <li><em>Repository access</em> : <strong>Only select repositories</strong> → votre dépôt de données (privé).</li>
+          <li><em>Permissions</em> → <em>Repository permissions</em> → <strong>Contents : Read-only</strong>. Rien d’autre.</li>
+          <li>Choisissez une date d’expiration, générez, puis collez le token ici.</li>
+        </ol>
+        <p class="small muted">Fichiers attendus dans <code>${esc(cfg.dossier ?? 'data')}/</code> : ${Object.values(FICHIERS).map(f => `<code>${f}</code>`).join(', ')}. Modèles et explications dans le README.</p>`, { cls: 'span-5' })}
+    </div>`;
+
+  return { html, after() {
+    const form = document.getElementById('cfg-form');
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      App.saveCfg({ owner: fd.get('owner').trim(), repo: fd.get('repo').trim(), branche: fd.get('branche').trim() || 'main', dossier: fd.get('dossier').trim(), token: fd.get('token').trim(), demo: false }, !!fd.get('remember'));
+      App.load('overview');
+    });
+    document.getElementById('btn-demo').addEventListener('click', () => { App.saveCfg({ ...App.getCfg(), demo: true }, App.getCfg().remember); App.load('overview'); });
+    document.getElementById('btn-forget').addEventListener('click', () => { App.saveCfg({ ...App.getCfg(), token: '' }, false); App.render(); });
+  } };
+}
+
+</script>
+  <script>
+'use strict';
+
+const CFG_KEY = 'suivi-comptes.cfg';
+const THEME_KEY = 'suivi-comptes.theme';
+const store = {
+  get(s, k) { try { return s.getItem(k); } catch { return null; } },
+  set(s, k, v) { try { v == null ? s.removeItem(k) : s.setItem(k, v); } catch { /* stockage indisponible */ } },
+};
+
+const PAGES = { overview: pageOverview, depenses: pageDepenses, epargne: pageEpargne, immobilier: pageImmobilier, parametres: pageParametres };
+
+const App = {
+  M: null,
+  state: { mois: null, error: null, loading: false },
+
+  getCfg() {
+    let cfg = {};
+    try { cfg = JSON.parse(store.get(localStorage, CFG_KEY) || '{}'); } catch { cfg = {}; }
+    if (!cfg.remember) cfg.token = store.get(sessionStorage, CFG_KEY + '.token') || '';
+    return cfg;
+  },
+  saveCfg(cfg, remember) {
+    const { token, ...rest } = cfg;
+    rest.remember = remember;
+    if (remember) { rest.token = token; store.set(sessionStorage, CFG_KEY + '.token', null); }
+    else store.set(sessionStorage, CFG_KEY + '.token', token || null);
+    store.set(localStorage, CFG_KEY, JSON.stringify(rest));
+  },
+
+  route() { const r = location.hash.slice(1); return PAGES[r] ? r : 'overview'; },
+
+  async load(goTo) {
+    const cfg = this.getCfg();
+    this.state.error = null;
+    if (!cfg.demo && !(cfg.owner && cfg.repo && cfg.token)) {
+      this.M = null;
+      if (location.hash !== '#parametres') location.hash = 'parametres'; else this.render();
+      return;
+    }
+    this.state.loading = true; this.render();
+    try {
+      this.M = cfg.demo ? buildModel(DEMO.generate(), 'demo') : await loadFromGitHub(cfg);
+    } catch (e) {
+      this.M = null; this.state.error = e.message;
+      goTo = 'parametres';
+    }
+    this.state.loading = false;
+    if (goTo && location.hash !== '#' + goTo) location.hash = goTo; else this.render();
+  },
+
+  render({ garderScroll = false } = {}) {
+    const route = this.route(), view = document.getElementById('view'), y = window.scrollY;
+    document.querySelectorAll('[data-route]').forEach(a => a.setAttribute('aria-current', a.dataset.route === route ? 'page' : 'false'));
+    const pill = document.getElementById('source-pill');
+    pill.className = 'pill ' + (this.M ? this.M.source : 'none');
+    pill.textContent = this.state.loading ? 'Chargement…' : this.M
+      ? (this.M.source === 'demo' ? 'Démo' : 'GitHub · ' + this.M.chargeLe.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))
+      : 'Non connecté';
+
+    Charts.destroyAll();
+    if (this.state.loading) { view.innerHTML = '<p class="muted center pad">Chargement des données…</p>'; return; }
+    if (!this.M && route !== 'parametres') {
+      view.innerHTML = `<section class="card empty-state"><h2>Aucune donnée chargée</h2><p class="muted">Renseignez votre dépôt GitHub et votre token, ou essayez le mode démo.</p><a class="btn primary" href="#parametres">Ouvrir les paramètres</a></section>`;
+      return;
+    }
+    const page = PAGES[route](this.M, this.state);
+    view.innerHTML = page.html;
+    if (page.after) page.after();
+    window.scrollTo(0, garderScroll ? y : 0);
+  },
+
+  applyTheme(t) {
+    if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  },
+  toggleTheme() {
+    // Thème sombre par défaut ; le clair est un choix explicite
+    const cur = document.documentElement.dataset.theme || 'dark';
+    const next = cur === 'dark' ? 'light' : 'dark';
+    store.set(localStorage, THEME_KEY, next);
+    this.applyTheme(next);
+    this.render();
+  },
+
+  init() {
+    this.applyTheme(store.get(localStorage, THEME_KEY));
+    window.addEventListener('hashchange', () => this.render());
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.render());
+    document.getElementById('btn-refresh').addEventListener('click', () => this.load());
+    document.getElementById('btn-theme').addEventListener('click', () => this.toggleTheme());
+    this.load();
+  },
+};
+
+App.init();
+
+</script>
+</body>
+</html>
