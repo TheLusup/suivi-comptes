@@ -577,6 +577,7 @@ const TYPES = {
   'cto':           { label: 'Compte-titres',  classe: 'placements' },
   'per':           { label: 'PER',            classe: 'placements' },
   'pee':           { label: 'PEE',            classe: 'placements' },
+  'pension':       { label: 'Pension',        classe: 'placements' },
   'crypto':        { label: 'Crypto',         classe: 'placements' },
   'credit':        { label: 'Crédit',         classe: 'dettes' },
 };
@@ -2092,7 +2093,7 @@ function pageEpargne(M, state) {
   if (!comptes.length) return { html: `<div class="page-h"><h1>Épargne & placements</h1></div>${UI.card('Aucun compte', UI.empty('Ajoutez des comptes de type livret, assurance-vie, pea… dans comptes.json.'))}` };
   // Onglets : tous les comptes, puis un par type de support (PEA, assurance vie, livrets…). Un onglet
   // regroupe aussi les comptes clôturés de son type (historique), mais n'apparaît que s'il en reste un ouvert.
-  const ORDRE = ['pea', 'assurance-vie', 'per', 'pee', 'cto', 'livret', 'fonds-monetaire', 'pel', 'crypto'];
+  const ORDRE = ['pea', 'assurance-vie', 'per', 'pee', 'pension', 'cto', 'livret', 'fonds-monetaire', 'pel', 'crypto'];
   const types = [...new Set(comptes.map(c => c.type))].sort((a, b) => (ORDRE.indexOf(a) + 1 || 99) - (ORDRE.indexOf(b) + 1 || 99));
   const groupes = types.map(type => {
     const cs = comptes.filter(c => c.type === type);
@@ -2106,7 +2107,7 @@ function pageEpargne(M, state) {
   const choix = comptesVue.length === 1 ? comptesVue[0] : null;
   const ids = comptesVue.map(c => c.id);
   // Une couleur par type de support, la même partout (onglets, cartes, anneau, courbe)
-  const COULEUR = { pea: 3, 'assurance-vie': 6, livret: 1, per: 4, pee: 7, 'fonds-monetaire': 5, cto: 2, pel: 2, crypto: 8 };
+  const COULEUR = { pea: 3, 'assurance-vie': 6, livret: 1, per: 4, pee: 7, pension: 2, 'fonds-monetaire': 5, cto: 8, pel: 2, crypto: 8 };
   const varCouleur = type => `var(--series-${COULEUR[type] || 7})`;
   const couleur = type => Charts.colors().series[(COULEUR[type] || 7) - 1];
   const onglets = groupes.length > 1 ? `<nav class="onglets" aria-label="Supports">
