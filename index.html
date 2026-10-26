@@ -177,6 +177,17 @@ tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
 .attentions { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .attention { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: var(--surface-2); border-radius: var(--radius-sm); }
 .attention .status { flex: none; margin-top: 1px; }
+
+/* Recommandations */
+.recos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.reco { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.reco h3 { margin: 0; font-size: 15px; line-height: 1.35; }
+.reco p { margin: 0; font-size: 13.5px; line-height: 1.5; }
+.reco .link { margin-top: auto; }
+.reco-h { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.reco-rang { font-size: 12px; font-weight: 700; color: var(--text-2); min-width: 20px; }
+.reco-h .status { font-size: 12px; font-weight: 600; }
+@media (max-width: 900px) { .recos { grid-template-columns: 1fr; } }
 .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; }
 .span-4 { grid-column: span 4; } .span-5 { grid-column: span 5; } .span-6 { grid-column: span 6; }
 .span-7 { grid-column: span 7; } .span-8 { grid-column: span 8; } .span-12 { grid-column: span 12; }
@@ -385,6 +396,10 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
       <a href="#overview" data-route="overview">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5.5v-6h-5v6H4a1 1 0 0 1-1-1z"/></svg>
         <span>Vue d'ensemble</span>
+      </a>
+      <a href="#recommandations" data-route="recommandations">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21h6v-1.5H9zM12 2.5a6.5 6.5 0 0 0-3.8 11.8c.5.4.8 1 .8 1.6V18h6v-2.1c0-.6.3-1.2.8-1.6A6.5 6.5 0 0 0 12 2.5z"/></svg>
+        <span>Conseils</span>
       </a>
       <a href="#depenses" data-route="depenses">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M2.5 9.5h19" class="cut"/></svg>
@@ -2341,6 +2356,248 @@ function pageParametres(M, state) {
   <script>
 'use strict';
 
+/* ---------- Recommandations ----------
+   Pistes classées par priorité (haute, moyenne, basse), recalculées à chaque chargement à partir des données :
+   la priorité et les montants suivent la situation du moment. Ce sont des repères de bonne gestion (épargne de
+   précaution, budget, frais, concentration des placements), pas un conseil en investissement personnalisé. */
+
+const PLAFONDS_LIVRETS = { 'livret-a': 22950, ldds: 12000, lep: 10000 };
+const METAL = { mois: 18.99, an: 185, date: '09/07/2026' };   // tarif Revolut Metal en France
+const NIVEAUX = {
+  haute: { label: 'Haute', cls: 'critical', ordre: 0 },
+  moyenne: { label: 'Moyenne', cls: 'warning', ordre: 1 },
+  basse: { label: 'Basse', cls: 'neutral', ordre: 2 },
+};
+
+function recommandations(M) {
+  const V = vueDepenses(M, ''), today = D.today(), cm = F.moisCourant();
+  const mois = n => D.range(D.addMonths(cm, -n), D.addMonths(cm, -1));
+  const moy = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
+  const nb = (v, d = 1) => v.toLocaleString('fr-FR', { maximumFractionDigits: d });
+  const recos = [];
+  const ajout = (niveau, theme, titre, constat, piste, lien) => recos.push({ niveau, theme, titre, constat, piste, lien });
+  const compte = id => M.comptes.find(c => c.id === id);
+  const valeur = id => compte(id) && F.ouvert(compte(id), today) ? F.valeur(M, id, today) : 0;
+  const m12 = mois(12), m6 = mois(6), m3 = mois(3);
+  const P12 = m12.map(m => F.pnl(V, m)), P6 = P12.slice(-6), P3 = P12.slice(-3);
+  const capital = p => -(p.parCat.get(normKey('Capital remboursé')) || 0);
+  const depCat = (cat, ms) => ms.map(m => F.depenses(V, m).parCat.get(normKey(cat))?.montant || 0);
+  const budget = F.budget(V, cm);
+  const revenus12 = moy(P12.map(p => p.revenus));
+  const ops12 = M.transactions.filter(t => t.date >= m12[0] + '-01' && t.date < cm + '-01');
+
+  // 1. Épargne de précaution : livrets et fonds monétaire, rapportés aux sorties mensuelles (charges + capital du crédit)
+  const dispo = M.comptes.filter(c => F.classe(c) === 'epargne' && F.ouvert(c, today)).reduce((s, c) => s + F.valeur(M, c.id, today) * c.quotePart, 0);
+  const besoin = moy(P6.map(p => p.charges)) + moy(P3.map(capital));
+  if (besoin > 0) {
+    const n = dispo / besoin, cible = 6 * besoin, manque = Math.max(0, cible - dispo);
+    const placeA = Math.max(0, PLAFONDS_LIVRETS['livret-a'] - valeur('livret-a'));
+    const pleins = Object.keys(PLAFONDS_LIVRETS).filter(id => valeur(id) >= PLAFONDS_LIVRETS[id] - 1).map(id => compte(id).nom);
+    ajout(n < 6 ? 'haute' : 'basse', 'Sécurité',
+      n < 6 ? `Porter l’épargne de précaution à 6 mois de dépenses (${nb(n)} mois aujourd’hui)` : `Épargne de précaution : ${nb(n)} mois de dépenses, objectif atteint`,
+      `${eur(dispo)} disponibles (livrets et fonds monétaire), pour ${eur(besoin)} de sorties par mois (charges des 6 derniers mois + votre part du capital du crédit). Objectif 6 mois : ${eur(cible)}.`,
+      n < 6 ? `Il manque ${eur(manque)}. Un virement automatique de ${eur(Math.ceil(manque / 6 / 50) * 50)} par mois vers le Livret A, le lendemain du salaire, comble l’écart en 6 mois. Le Livret A a encore ${eur(placeA)} de place${pleins.length ? ` ; ${pleins.join(', ')} ${pleins.length > 1 ? 'sont pleins' : 'est plein'}` : ''}.`
+        : `Au-delà, l’épargne supplémentaire peut aller vers des projets ou le long terme plutôt que vers les livrets.`, '#epargne');
+  }
+
+  // 2. Trésorerie des comptes courants : fins de mois dans le rouge
+  const debut12 = D.endOfMonth(D.addMonths(cm, -12));
+  const rouges = M.soldes.filter(s => s.solde < 0 && s.date > debut12 && F.classe(compte(s.compte) || {}) === 'liquidites');
+  if (rouges.length) {
+    const pire = Math.min(...rouges.map(s => s.solde)), recent = rouges.some(s => s.date > D.endOfMonth(D.addMonths(cm, -6)));
+    const noms = [...new Set(rouges.map(s => compte(s.compte).nom))];
+    ajout(recent ? 'haute' : 'moyenne', 'Sécurité', `Éviter les fins de mois à découvert (${rouges.length} en 12 mois)`,
+      `${noms.join(', ')} : ${rouges.map(s => `${eur(s.solde)} au ${D.fmt(s.date)}`).join(', ')}. Le compte joint porte l’échéance du prêt, prélevée vers le 27.`,
+      `Garder un coussin d’au moins ${eur(Math.ceil(-pire / 100) * 100 + 200)} sur ${noms.length > 1 ? 'ces comptes' : 'ce compte'}, et caler les virements d’alimentation du compte joint (les vôtres et ceux d’Élodie) avant l’échéance du prêt.`, '#depenses');
+  }
+
+  // 3. Plus gros postes variables : là où une baisse pèse le plus
+  const variables = ['Voyages', 'Restaurants', 'Courses', 'Shopping', 'Transports', 'Sorties', 'Loisirs', 'Maison']
+    .map(c => ({ c, a12: moy(depCat(c, m12)), a3: moy(depCat(c, m3)), b: budget.get(normKey(c))?.montant || 0 }))
+    .filter(x => x.a12 > 0).sort((a, b) => b.a12 - a.a12).slice(0, 3);
+  if (variables.length) {
+    const total = variables.reduce((s, x) => s + x.a12, 0);
+    ajout(total > 0.15 * revenus12 ? 'moyenne' : 'basse', 'Dépenses', `Vos trois plus gros postes variables : ${variables.map(x => x.c.toLowerCase()).join(', ')}`,
+      variables.map(x => `${x.c} ${eur(x.a12)}/mois sur 12 mois (${pct(revenus12 ? x.a12 / revenus12 : null)} des revenus${x.b ? `, budget ${eur(x.b)}` : ''}${x.a3 > 1.3 * x.a12 ? ` ; ${eur(x.a3)}/mois sur les 3 derniers mois` : ''})`).join(' · ') + '.',
+      `Ensemble ${eur(total)} par mois. Les réduire de 15 % libérerait ${eur(total * 0.15)} par mois, soit ${eur(total * 0.15 * 12)} par an. Les voyages restent dans le budget sur l’année : fixer une enveloppe annuelle (${eur((budget.get(normKey('Voyages'))?.montant || 0) * 12)}) et la suivre voyage par voyage est plus parlant qu’un plafond mensuel.`, '#depenses');
+  }
+
+  // 4. Budget non consommé : catégories nettement sous leur budget depuis 6 mois
+  const sous = [...budget.values()].map(b => ({ label: b.label, b: b.montant, a6: moy(depCat(b.label, m6)) }))
+    .filter(x => x.b >= 30 && x.a6 < 0.6 * x.b);
+  if (sous.length) {
+    const marge = sous.reduce((s, x) => s + x.b - Math.max(0, x.a6), 0);
+    ajout(marge > 200 ? 'moyenne' : 'basse', 'Budget', `Réaffecter ${eur(marge)} de budget mensuel non consommé`,
+      `Sur 6 mois : ${sous.map(x => `${x.label} ${eur(Math.max(0, x.a6))} pour ${eur(x.b)}`).join(', ')}.`,
+      `Baisser ces budgets et programmer l’écart en virement automatique vers l’épargne : un budget qui n’est pas dépensé a tendance à l’être ailleurs.`, '#depenses');
+  }
+
+  // 5. Taux d'épargne
+  const taux = P => { const r = P.reduce((s, p) => s + p.revenus, 0); return r > 0 ? P.reduce((s, p) => s + p.resultat, 0) / r : null; };
+  const t12 = taux(P12), t6 = taux(P6);
+  if (t12 != null) ajout(t6 != null && t6 < 0.15 ? 'haute' : t6 != null && t6 < 0.2 ? 'moyenne' : 'basse', 'Budget', `Taux d’épargne : ${pct(t6)} sur 6 mois, ${pct(t12)} sur 12 mois`,
+    `Revenus moins charges nettes (compte joint à votre part), capital du crédit compté en épargne. Les 12 mois comprennent la prime de décembre.`,
+    t6 >= 0.2 ? `Au-dessus du repère courant de 20 %. Pour qu’il se retrouve sur les comptes d’épargne, automatisez les virements le jour du salaire plutôt que d’épargner ce qui reste en fin de mois.` : `Sous le repère courant de 20 % : les pistes « postes variables » et « budget non consommé » sont les leviers.`, '#depenses');
+
+  // 6. Prime annuelle : la planifier avant de la recevoir
+  const salaires = ops12.filter(t => normKey(t.categorie) === normKey('Salaire') && t.montant > 0);
+  const med = salaires.length ? [...salaires].map(t => t.montant).sort((a, b) => a - b)[Math.floor(salaires.length / 2)] : 0;
+  const prime = salaires.filter(t => t.montant > 2 * med).sort((a, b) => b.montant - a.montant)[0];
+  if (prime) ajout('moyenne', 'Budget', `Décider à l’avance de l’usage de la prime de fin d’année`,
+    `${eur(prime.montant)} reçus le ${D.fmt(prime.date)} (salaire habituel ${eur(med)}).`,
+    `Fixer la répartition avant le versement, dans cet ordre : compléter l’épargne de précaution (voir plus haut), mettre de côté les projets à moins de 5 ans sur des supports sans risque, puis le long terme. Ce qui n’a pas d’affectation finit souvent en dépenses courantes.`, '#depenses');
+
+  // 7. Opérations non classées
+  const divers = ops12.filter(t => ['divers', 'non categorise'].includes(normKey(t.categorie)) && t.montant < 0);
+  const totDivers = -divers.reduce((s, t) => s + t.montant, 0);
+  if (totDivers > 300) {
+    const gros = divers.filter(t => t.montant <= -150).sort((a, b) => a.montant - b.montant).slice(0, 5);
+    ajout(totDivers > 1500 ? 'moyenne' : 'basse', 'Données', `Classer ${eur(totDivers)} de dépenses « Divers » sur 12 mois`,
+      gros.length ? `Les plus grosses : ${gros.map(t => `${esc(t.libelle)} ${eur(-t.montant)} (${D.fmt(t.date)})`).join(', ')}.` : `${divers.length} opérations.`,
+      `Les reclasser dans la page Dépenses : le budget et les comparaisons sont d’autant plus justes.`, '#depenses');
+  }
+
+  // 8. Concentration géographique des actions du PEA
+  const lignes = id => { const ps = M.positions.filter(p => p.compte === id), d = ps.reduce((a, p) => p.date > a ? p.date : a, ''); return ps.filter(p => p.date === d).map(p => ({ titre: p.titre, v: p.quantite * p.cours })); };
+  const pea = lignes('pea'), totPea = pea.reduce((s, l) => s + l.v, 0);
+  if (totPea > 0) {
+    const us = pea.reduce((s, l) => s + l.v * (/S&P|Nasdaq/i.test(l.titre) ? 1 : /World/i.test(l.titre) ? 0.7 : 0), 0);
+    const sp = pea.filter(l => /S&P 500/i.test(l.titre));
+    const etf = pea.filter(l => /ETF|iShares|Amundi|BNP Easy|S&P|Nasdaq|MSCI/i.test(l.titre)).reduce((s, l) => s + l.v, 0);
+    ajout(us / totPea > 0.6 ? 'moyenne' : 'basse', 'Placements', `PEA : environ ${pct(us / totPea)} exposé aux actions américaines`,
+      `${eur(us)} sur ${eur(totPea)} : ETF S&P 500 et Nasdaq-100 en totalité, MSCI World à ~70 % (poids des États-Unis dans l’indice). ETF : ${pct(etf / totPea)} du PEA, actions françaises en direct : ${pct(1 - etf / totPea)}.${sp.length > 1 ? ` Deux ETF suivent le même indice S&P 500 (${sp.map(l => `${esc(l.titre)} ${eur(l.v)}`).join(', ')}).` : ''}`,
+      `C’est un choix à assumer en connaissance de cause (dollar, valorisations, poids de quelques grandes valeurs technologiques). ${sp.length > 1 ? 'Les deux ETF S&P 500 font doublon : les regrouper simplifie le suivi sans changer l’exposition. ' : ''}Si vous voulez moins dépendre des États-Unis, c’est l’orientation des prochains versements qui permet d’ajuster, sans vendre.`, '#epargne');
+  }
+
+  // 9. Assurance vie : nombre de fonds et part des fonds thématiques
+  const av = lignes('av'), totAv = av.reduce((s, l) => s + l.v, 0);
+  if (av.length > 10) {
+    const them = av.filter(l => /Robotics|Artificial|Safety|Sport|Blockchain|Healthcare|Water/i.test(l.titre));
+    const petits = av.filter(l => l.v < 300);
+    ajout('moyenne', 'Placements', `Assurance vie : ${av.length} fonds pour ${eur(totAv)}`,
+      `Fonds thématiques (robotique, IA, sécurité, santé, sport, blockchain) : ${eur(them.reduce((s, l) => s + l.v, 0))}, soit ${pct(them.reduce((s, l) => s + l.v, 0) / totAv)}. ${petits.length} lignes de moins de 300 € (${petits.map(l => esc(l.titre)).join(', ')}).`,
+      `Beaucoup de fonds se recouvrent (plusieurs fonds actions monde) sans diversifier davantage, et les fonds thématiques ont en général des frais plus élevés et plus de volatilité. Une revue annuelle (frais de chaque fonds, recouvrements, lignes trop petites pour compter) aide à garder un contrat lisible. Les arbitrages à l’intérieur du contrat ne sont pas imposés.`, '#epargne');
+  }
+
+  // 10. Frais de gestion Mon Petit Placement
+  const mpp = -ops12.filter(t => /petit placement/i.test(t.libelle) && t.montant < 0).reduce((s, t) => s + t.montant, 0);
+  if (mpp > 0) {
+    const encours = valeur('av') + valeur('per');
+    ajout(mpp / encours > 0.006 ? 'moyenne' : 'basse', 'Frais', `Frais Mon Petit Placement : ${eur(mpp)} sur 12 mois`,
+      `Prélevés chaque trimestre sur le compte LCL, soit ${pct(mpp / encours)} de l’encours assurance vie + PER (${eur(encours)}), en plus des frais propres à chaque fonds.`,
+      `Comparer chaque année le coût total (frais de gestion + frais des fonds) avec d’autres contrats. Ne pas clôturer pour autant un contrat d’assurance vie ancien : sa date d’ouverture compte pour la fiscalité (après 8 ans).`, '#epargne');
+  }
+
+  // 11. Fonds monétaire en livres
+  const gbp = valeur('revolut-epargne');
+  if (gbp > 500) ajout('basse', 'Placements', `Fonds monétaire Revolut en livres : ${eur(gbp)}`,
+    `Placé en livres sterling : sa valeur en euros varie avec le change. Son historique est reconstitué, avec un écart d’environ 1 535 £ qu’aucun export n’explique.`,
+    `S’il n’y a pas de dépense prévue en livres, c’est une épargne de précaution exposée au change. Vérifier aussi dans l’application le relevé du fonds pour expliquer l’écart.`, '#epargne');
+
+  // 12. PEE : abondement de l'employeur
+  if (valeur('pee') > 0 || compte('pee')) ajout('moyenne', 'Placements', `PEE : vérifier le plafond d’abondement KPMG`,
+    `Vos versements volontaires (600 € par an) ont été abondés par KPMG : 451,50 € en 2024, 541,80 € en 2025 et 2026.`,
+    `L’abondement est un complément immédiat versé par l’employeur, souvent le placement le plus rentable disponible, en échange d’un blocage de 5 ans (avec cas de déblocage anticipé). Vérifier dans l’accord ou sur l’espace Natixis si un versement plus élevé serait encore abondé.`, '#epargne');
+
+  // 13. PER : intérêt fiscal selon la tranche d'imposition
+  if (valeur('per') > 0) ajout('basse', 'Fiscalité', `PER : vérifier que la déduction fiscale vaut le blocage`,
+    `${eur(valeur('per'))} sur le PER, alimenté chaque mois depuis avril 2026. L’argent est bloqué jusqu’à la retraite (sauf achat de la résidence principale et accidents de la vie).`,
+    `Les versements se déduisent du revenu imposable : l’économie d’impôt est égale à votre tranche marginale (TMI). Vérifier sur l’avis d’impôt la TMI et le plafond « épargne retraite » disponible ; l’intérêt est fort à 30 % et plus, faible à 11 %.`, '#epargne');
+
+  // 14. Pension britannique dormante
+  if (valeur('pension-uk') > 0) ajout('basse', 'Placements', `Pension britannique : ${eur(valeur('pension-uk'))} sans cotisations depuis 2021`,
+    `Plan Royal London « paid up », investi dans un portefeuille piloté.`,
+    `Garder l’adresse et l’e-mail à jour chez Royal London et vérifier une fois par an les frais annuels. Un transfert vers la France est complexe (régime fiscal spécifique, frais) : rarement intéressant pour ce montant.`, '#epargne');
+
+  // 15. Crédit immobilier : rembourser par anticipation ou épargner
+  const bien = M.immobilier?.[0];
+  if (bien?.pret) ajout('basse', 'Immobilier', `Crédit immobilier à ${nb(parseNum(bien.pret.taux), 2)} % : le remboursement anticipé n’est pas prioritaire`,
+    `Votre part du capital restant dû : ${eur(Immo.crd(bien, today) * Immo.part(bien))}. Rembourser par anticipation « rapporte » le taux du crédit, sans risque, mais immobilise l’argent dans le bien.`,
+    `Tant que l’épargne de précaution n’est pas complète, elle passe avant. Ensuite, comparer le taux du crédit (${nb(parseNum(bien.pret.taux), 2)} %) au rendement net des livrets et des placements ; vérifier aussi dans l’offre de prêt les indemnités de remboursement anticipé.`, '#immobilier');
+
+  // 16. Frais bancaires : renvoi vers la comparaison LCL / Revolut
+  const banque = fraisBancaires(M, ops12);
+  ajout('basse', 'Banque', `Frais bancaires : ${eur(banque.total)} sur 12 mois`,
+    `LCL ${eur(banque.lcl)} (carte ${eur(banque.carte)}, virements ${eur(banque.virements)}, tenue de compte compensée par la remise fidélité) · Revolut ${eur(banque.revolut)} (abonnement).`,
+    `Les frais sont déjà bas : changer de banque pour les frais seuls ne rapporte presque rien. Voir la comparaison LCL / Revolut Metal plus bas.`, '#recommandations');
+
+  return recos.sort((a, b) => NIVEAUX[a.niveau].ordre - NIVEAUX[b.niveau].ordre);
+}
+
+// Frais bancaires des 12 derniers mois, hors frais de gestion des placements et hors arrondis RevPoints
+function fraisBancaires(M, ops12) {
+  const f = ops12.filter(t => normKey(t.categorie) === normKey('Banque & frais') && !/petit placement|revpoints/i.test(t.libelle));
+  const somme = l => -l.reduce((s, t) => s + t.montant, 0);
+  const lcl = f.filter(t => t.compte === 'courant'), revolut = f.filter(t => t.compte.startsWith('revolut'));
+  return { lcl: somme(lcl), revolut: somme(revolut), total: somme(f),
+    carte: somme(lcl.filter(t => /carte/i.test(t.libelle))), virements: somme(lcl.filter(t => /virement/i.test(t.libelle))) };
+}
+
+// LCL ou Revolut Metal : ce que porte LCL, ce que coûte chaque option
+function comparaisonBanque(M) {
+  const today = D.today(), cm = F.moisCourant();
+  const ops12 = M.transactions.filter(t => t.date >= D.addMonths(cm, -12) + '-01' && t.date < cm + '-01');
+  const fb = fraisBancaires(M, ops12);
+  const lcl = M.comptes.filter(c => c.banque === 'LCL' && F.ouvert(c, today) && F.valeur(M, c.id, today) > 0);
+  // Voyages à votre part (compte joint pour moitié), comme dans le budget
+  const voyages = -vueDepenses(M, '').transactions.filter(t => t.date >= D.addMonths(cm, -12) + '-01' && t.date < cm + '-01' && normKey(t.categorie) === normKey('Voyages')).reduce((s, t) => s + t.montant, 0);
+  return `
+    <p>Ce que porte LCL aujourd’hui : ${lcl.map(c => `${esc(c.nom)} ${eur(F.valeur(M, c.id, today))}`).join(', ')}, plus le salaire et les prélèvements (Mon Petit Placement, Kereis, abonnements).</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Option</th><th class="num">Coût par an</th><th>Ce que ça implique</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Garder LCL + Revolut Plus</strong> (situation actuelle)</td><td class="num">${eur(fb.lcl + fb.revolut)}</td>
+          <td>Rien à faire. Frais LCL ${eur(fb.lcl)} (carte et virements), Revolut ${eur(fb.revolut)}.</td></tr>
+        <tr><td><strong>Fermer LCL, tout sur Revolut Metal</strong></td><td class="num">${eur(METAL.an)}<div class="muted small">${eur(METAL.mois, true)}/mois sans engagement annuel</div></td>
+          <td>Le Livret A et le LDDS ne se transfèrent pas : il faut les clôturer et les rouvrir dans une banque qui les propose (une personne ne peut en avoir qu’un de chaque) ; Revolut ne les propose pas à ce jour, à vérifier. Changer la domiciliation du salaire et tous les prélèvements. Garder LCL Vie Jeunes ouverte si LCL l’accepte sans compte (date fiscale). Metal se justifie par ses avantages (assurances voyage, cashback, change) : à comparer à vos ${eur(voyages)} de voyages sur 12 mois et aux garanties de votre carte actuelle.</td></tr>
+        <tr><td><strong>Fermer LCL, tout sur BoursoBank</strong> (compte déjà ouvert)</td><td class="num">≈ 0 €</td>
+          <td>Banque en ligne où sont déjà le compte joint et le prêt (vérifier dans l’offre de prêt une éventuelle obligation de domiciliation des revenus). Mêmes démarches pour les livrets et les prélèvements. Revolut gratuit ou Plus reste utile pour les voyages.</td></tr>
+      </tbody></table></div>
+    <p class="small"><strong>Lecture :</strong> fermer LCL économiserait au plus ${eur(fb.lcl)} par an. Passer à Metal coûterait ${eur(METAL.an - fb.revolut)} de plus que votre abonnement actuel : l’opération n’a de sens que si vous utilisez vraiment ses avantages, pas pour réduire les frais. Une banque principale de plus en moins (LCL ou Bourso) simplifie en revanche la gestion : moins de virements entre comptes, moins de comptes à suivre.</p>
+    <p class="small muted">Tarif Revolut Metal en France depuis le ${METAL.date} ; vérifiez-le dans l’application avant de souscrire.</p>`;
+}
+
+function pageRecommandations(M, state) {
+  const recos = recommandations(M);
+  const filtre = NIVEAUX[state.niveauReco] ? state.niveauReco : '';
+  const compte = n => recos.filter(r => r.niveau === n).length;
+  const liste = recos.filter(r => !filtre || r.niveau === filtre).map((r, i) => `
+    <li class="reco">
+      <div class="reco-h"><span class="reco-rang">${i + 1}</span><span class="status ${NIVEAUX[r.niveau].cls}">● ${NIVEAUX[r.niveau].label}</span><span class="tag">${esc(r.theme)}</span></div>
+      <h3>${r.titre}</h3>
+      <p class="muted">${r.constat}</p>
+      <p><strong>Piste :</strong> ${r.piste}</p>
+      ${r.lien && r.lien !== '#recommandations' ? `<a class="link small" href="${r.lien}">Voir les données →</a>` : ''}
+    </li>`).join('');
+  const html = `
+    <div class="page-h"><h1>Recommandations</h1><p class="muted">${recos.length} pistes calculées à partir de vos données au ${D.fmt(D.today())}</p></div>
+    <div class="grid">
+      <section class="card span-12">
+        <div class="kpis">
+          ${UI.kpi('Priorité haute', `<span class="status critical">${compte('haute')}</span>`, 'à traiter en premier')}
+          ${UI.kpi('Priorité moyenne', `<span class="status warning">${compte('moyenne')}</span>`, 'dans les prochains mois')}
+          ${UI.kpi('Priorité basse', `<span class="status neutral">${compte('basse')}</span>`, 'à garder en tête')}
+        </div>
+        <p class="small muted">Repères de bonne gestion appliqués à vos chiffres, recalculés à chaque mise à jour. Je ne suis pas conseiller financier agréé : pour un choix d’investissement, de fiscalité ou de banque, faites-vous confirmer la piste par un professionnel.</p>
+      </section>
+      <div class="span-12 onglets" role="group" aria-label="Filtrer par priorité">
+        <button class="onglet" data-niveau="" aria-pressed="${!filtre}">Toutes (${recos.length})</button>
+        ${Object.entries(NIVEAUX).map(([k, n]) => `<button class="onglet" data-niveau="${k}" aria-pressed="${filtre === k}">${n.label} (${compte(k)})</button>`).join('')}
+      </div>
+      <section class="span-12"><ol class="recos">${liste}</ol></section>
+      ${UI.card('Fermer LCL et passer sur Revolut Metal ?', comparaisonBanque(M), { sub: 'Coûts des 12 derniers mois et démarches', cls: 'span-12' })}
+    </div>`;
+  return { html, after() {
+    document.querySelectorAll('.onglet[data-niveau]').forEach(b => b.addEventListener('click', () => {
+      state.niveauReco = b.dataset.niveau; App.render({ garderScroll: true });
+    }));
+  } };
+}
+
+</script>
+  <script>
+'use strict';
+
 const CFG_KEY = 'suivi-comptes.cfg';
 const THEME_KEY = 'suivi-comptes.theme';
 const store = {
@@ -2348,7 +2605,7 @@ const store = {
   set(s, k, v) { try { v == null ? s.removeItem(k) : s.setItem(k, v); } catch { /* stockage indisponible */ } },
 };
 
-const PAGES = { overview: pageOverview, depenses: pageDepenses, epargne: pageEpargne, immobilier: pageImmobilier, parametres: pageParametres };
+const PAGES = { overview: pageOverview, recommandations: pageRecommandations, depenses: pageDepenses, epargne: pageEpargne, immobilier: pageImmobilier, parametres: pageParametres };
 
 const App = {
   M: null,
