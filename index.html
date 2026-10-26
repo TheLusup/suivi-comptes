@@ -148,29 +148,46 @@ tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
 .support .detail { font-size: 12px; color: var(--muted); }
 .onglet[aria-pressed="true"][style*="--c"] { background: var(--c); color: #fff; }
 
-/* Dépenses : P&L résumé */
-.pnl-resume { display: grid; gap: 4px; }
-.pr-ligne { display: grid; grid-template-columns: 210px minmax(0, 1fr) 120px; gap: 16px; align-items: center; padding: 10px 4px; border-radius: 10px; }
-.pr-ligne.clic { cursor: pointer; }
-.pr-ligne.clic:hover { background: var(--surface-2); }
-.pr-ligne .lib { font-weight: 600; }
-.pr-ligne .chevron { display: inline-block; color: var(--muted); transition: transform .15s; }
-.pr-ligne .chevron.ouvert { transform: rotate(90deg); }
-.pr-ligne .val { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
-.pr-ligne .val small { display: block; font-weight: 500; font-size: 11px; color: var(--muted); }
-.pr-ligne.sous { padding: 6px 4px 6px 28px; grid-template-columns: 182px minmax(0, 1fr) 120px; }
-.pr-ligne.sous .lib { font-weight: 500; color: var(--text-2); font-size: 13px; }
-.pr-ligne.sous .val { font-weight: 600; font-size: 13px; }
-.pr-ligne.total { border-top: 1px solid var(--border); border-radius: 0; margin-top: 6px; padding-top: 14px; }
-.minibars { display: flex; align-items: flex-end; gap: 4px; height: 34px; }
-.minibars span { flex: 1; min-width: 4px; border-radius: 3px 3px 0 0; background: var(--b); opacity: .55; }
-.minibars span.sel { opacity: 1; }
-.barre { height: 10px; border-radius: 6px; background: var(--b); }
-.pr-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+/* Dépenses : tuiles par catégorie */
+.titre-section { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 4px 2px 12px; }
+.titre-section h2 { font-size: 18px; margin: 0; }
+.titre-section.sous { margin-top: 22px; }
+.titre-section h3 { font-size: 14px; margin: 0; color: var(--text-2); }
+.cat-tuiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.cat-tuiles.petites { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+.cat-tuile { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 6px; padding: 14px 16px; border-radius: var(--radius-sm);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c, var(--muted)) 16%, transparent), transparent 70%), var(--surface); border: 1px solid var(--border); }
+.cat-tuile:hover { background-color: var(--surface-2); }
+.cat-tuile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cat-tuile.sel { border-color: var(--c, var(--text)); box-shadow: 0 0 0 1px var(--c, var(--text)); }
+.cat-tuile.vide { opacity: .55; }
+.cat-tuile .nom { font-size: 13px; font-weight: 600; color: var(--text-2); display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cat-tuile .montant { font-size: 22px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.cat-tuile .detail { font-size: 12px; color: var(--muted); }
+.cat-tuile .jauge { position: relative; height: 6px; border-radius: 4px; background: var(--surface-3); }
+.cat-tuile .jauge > span { display: block; height: 100%; border-radius: 4px; background: var(--c); }
+.cat-tuile .jauge > span.over { background: var(--critical); }
+.cat-tuile .jauge i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: .5; }
+.cat-tuile.hors { background: var(--surface); }
+.cat-tuile.hors .montant { font-size: 18px; }
+.pastille { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; background: var(--c); vertical-align: middle; }
+.jauge-budget { margin: 6px 0 12px; max-width: 520px; }
+.hero-kpis { margin: 14px 0 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ops-wrap { max-height: 560px; overflow-y: auto; }
 @media (max-width: 760px) {
   .epargne-hero { grid-template-columns: 1fr; }
-  .pr-ligne { grid-template-columns: 110px minmax(0, 1fr) 90px; gap: 10px; }
-  .pr-ligne.sous { grid-template-columns: 96px minmax(0, 1fr) 90px; padding-left: 14px; }
+  .cat-tuiles, .cat-tuiles.petites { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .cat-tuile { padding: 12px; }
+  .cat-tuile .montant { font-size: 19px; }
+  /* Opérations : une carte par opération (libellé, puis date et montant, puis catégorie) */
+  table.ops-cat, table.ops-cat tbody, table.ops-cat td { display: block; }
+  table.ops-cat tr { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  table.ops-cat td { padding: 0; }
+  table.ops-cat td:nth-child(2) { grid-column: 1 / -1; grid-row: 1; }
+  table.ops-cat td:nth-child(1) { grid-row: 2; }
+  table.ops-cat td:nth-child(3) { grid-row: 2; text-align: right; }
+  table.ops-cat td:nth-child(4) { grid-column: 1 / -1; }
+  table.ops-cat .small-select select { max-width: none; }
 }
 
 /* Points d'attention (vue d'ensemble) */
@@ -230,10 +247,10 @@ tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--border);
   }
   .brand, .tools .pill { display: none; }
-  .tabs { flex-direction: row; justify-content: space-around; gap: 0; flex: 1; }
-  .tabs a { flex: 1; font-size: 10px; gap: 2px; padding: 2px; }
-  .tabs a span { white-space: nowrap; }
-  .tabs svg { width: 40px; height: 32px; padding: 6px 10px; }
+  .tabs { flex-direction: row; justify-content: space-around; gap: 0; flex: 1; min-width: 0; }
+  .tabs a { flex: 1 1 0; min-width: 0; font-size: 9.5px; gap: 2px; padding: 2px 1px; }
+  .tabs a span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .tabs svg { width: 34px; height: 30px; padding: 5px 8px; }
   .tools { margin: 0; }
   .tool-btns { flex-direction: column; gap: 4px; }
   .icon-btn { width: 30px; height: 30px; font-size: 14px; }
@@ -259,45 +276,8 @@ tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
 .track.big { height: 14px; margin: 10px 0 8px; }
 .fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #7d93ff); }
 .fill.over { background: var(--critical); }
-.fill.hb { background: var(--muted); }
 .pace { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); border-radius: 1px; opacity: .55; }
-.pace-key { display: inline-block; width: 2px; height: 12px; background: var(--text); opacity: .55; vertical-align: middle; margin-right: 4px; }
-.legend-note { margin: 12px 0 0; }
 
-.cats { display: grid; gap: 4px; }
-.cat-row { display: grid; grid-template-columns: minmax(110px, 1.1fr) 2fr auto 92px; gap: 14px; align-items: center; padding: 10px 8px; border-bottom: 1px solid var(--border); }
-.cat-row:last-child { border-bottom: 0; }
-.cat-name { font-weight: 500; min-width: 0; }
-.cat-val { font-size: 13px; }
-.cat-clic { cursor: pointer; border-radius: var(--radius-sm); }
-.cat-clic:hover { background: var(--surface-2); }
-.cat-clic:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.cat-clic .chevron { display: inline-block; color: var(--text-2); transition: transform .15s; font-size: 11px; }
-.cat-clic.ouvert .chevron { transform: rotate(90deg); }
-/* P&L mensuel */
-.pnl-wrap { margin: 0; }
-table.pnl { font-size: 13px; font-variant-numeric: tabular-nums; }
-table.pnl th, table.pnl td { padding: 5px 8px; white-space: nowrap; vertical-align: middle; }
-table.pnl th[scope="row"], table.pnl thead th:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1; text-align: left; font-weight: 500; min-width: 190px; }
-table.pnl thead th.pnl-sel { color: var(--text); font-weight: 650; }
-.pnl-section th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding-top: 14px !important; border-bottom: 1px solid var(--axis); background: var(--surface); }
-.pnl-g th[scope="row"] { font-weight: 600; }
-.pnl-c th[scope="row"] { padding-left: 26px; color: var(--text-2); font-weight: 400; }
-.pnl-c td { color: var(--text-2); }
-.pnl-groupe { cursor: pointer; }
-.pnl-groupe:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.pnl .chevron { display: inline-block; font-size: 10px; color: var(--text-2); transition: transform .15s; }
-.pnl .chevron.ouvert { transform: rotate(90deg); }
-.pnl-total th, .pnl-total td { font-weight: 650; border-top: 1px solid var(--axis); }
-.pnl-resultat th, .pnl-resultat td { font-weight: 700; background: var(--surface-2); }
-.pnl-resultat th[scope="row"] { background: var(--surface-2); }
-.pnl-taux th, .pnl-taux td { color: var(--text-2); font-style: italic; }
-.pnl-neg { color: var(--text-2); }
-.pnl-clic { cursor: pointer; }
-.pnl-clic:hover { background: var(--surface-2); text-decoration: underline; }
-.cats-titre { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 18px 0 4px; }
-.cat-detail { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 12px; margin: 4px 0 10px; }
-.cat-detail tbody tr:hover { background: var(--surface); }
 table.ops-cat td { padding: 5px 6px; font-size: 13px; vertical-align: middle; }
 .small-select select { min-width: 0; width: 100%; max-width: 210px; padding: 5px 10px; font-size: 13px; }
 .kpis-2 { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
@@ -380,10 +360,6 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   .card { padding: 16px; border-radius: 18px; }
   .hero-value { font-size: 34px; }
   .form-row { grid-template-columns: 1fr; }
-  .cat-row { grid-template-columns: 1fr auto; gap: 4px 10px; }
-  .cat-bar { grid-column: 1 / -1; grid-row: 2; }
-  .cat-status { text-align: right; }
-  .cat-val { grid-column: 1; grid-row: 3; }
 }
 
 </style>
@@ -1257,41 +1233,6 @@ const Charts = {
     return this.make(canvas, { type: 'bar', data: { labels, datasets }, options: opts });
   },
 
-  // Waterfall : barres flottantes. steps = [{ label, value, total }] ; une étape « total » part de zéro,
-  // les autres partent du cumul précédent (valeur négative = dépense).
-  waterfall(canvas, steps) {
-    const c = this.colors();
-    let cumul = 0;
-    const bars = steps.map(s => {
-      if (s.total) { cumul = s.value; return [0, s.value]; }
-      const debut = cumul; cumul += s.value; return [debut, cumul];
-    });
-    const couleurs = steps.map(s => s.total ? (s.value >= 0 ? (s.fin ? c.pos : c.series[0]) : c.neg) : c.neg + 'cc');
-    const opts = this.options(c, { legend: false });
-    opts.interaction = { mode: 'nearest', intersect: true };
-    opts.plugins.tooltip.callbacks.label = ctx => {
-      const s = steps[ctx.dataIndex];
-      return ` ${s.total ? eur(s.value) : eurSigned(s.value)} · reste ${eur(bars[ctx.dataIndex][1])}`;
-    };
-    opts.scales.x.ticks.autoSkip = false;
-    opts.scales.x.ticks.callback = function (v) { const l = this.getLabelForValue(v); return l.length > 14 ? l.slice(0, 13) + '…' : l; };
-    // Reliure entre deux barres successives
-    const liens = {
-      id: 'liens',
-      afterDatasetsDraw(chart) {
-        const meta = chart.getDatasetMeta(0), y = chart.scales.y, ctx = chart.ctx;
-        ctx.save(); ctx.strokeStyle = c.axis; ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
-        for (let i = 0; i < meta.data.length - 1; i++) {
-          const a = meta.data[i], b = meta.data[i + 1], v = bars[i][1];
-          ctx.beginPath(); ctx.moveTo(a.x + a.width / 2, y.getPixelForValue(v)); ctx.lineTo(b.x - b.width / 2, y.getPixelForValue(v)); ctx.stroke();
-        }
-        ctx.restore();
-      },
-    };
-    const datasets = [{ label: 'Montant', data: bars, backgroundColor: couleurs, borderRadius: 3, borderSkipped: false, categoryPercentage: 0.8, barPercentage: 0.9 }];
-    return this.make(canvas, { type: 'bar', data: { labels: steps.map(s => s.label), datasets }, options: opts, plugins: [liens] });
-  },
-
   make(canvas, cfg) {
     if (typeof Chart === 'undefined') {
       canvas.parentElement.innerHTML = '<p class="muted center">Graphique indisponible (bibliothèque non chargée, êtes-vous hors ligne ?)</p>';
@@ -1498,92 +1439,6 @@ function pageOverview(M) {
 }
 
 /* ---------- Dépenses ---------- */
-// P&L mensuel : une colonne par mois (12 mois jusqu'à mk), une ligne par groupe (dépliable en catégories)
-// P&L résumé : revenus, charges (dépliables en groupes triés), capacité d'épargne et versements vers
-// l'épargne, en moyennes mensuelles sur 12 mois, avec une mini-barre par mois (le mois choisi en plein).
-function pnlResume(M, mk, state) {
-  // Le mois en cours, incomplet, fausserait les moyennes : on s'arrête alors au mois précédent
-  const fin = mk === F.moisCourant() ? D.addMonths(mk, -1) : mk;
-  const mois = D.range(D.addMonths(fin, -11), fin).filter(m => m >= F.premierMois(M));
-  if (!mois.length) return UI.empty('Pas encore d’opérations.');
-  const P = mois.map(m => F.pnl(M, m)), n = mois.length, moy = vals => vals.reduce((s, v) => s + v, 0) / n;
-  const minibars = (vals, coul, fmt = eur) => {
-    const max = Math.max(...vals.map(Math.abs), 1);
-    return `<div class="minibars" aria-hidden="true">${vals.map((v, i) => `<span class="${i === n - 1 ? 'sel' : ''}" title="${D.monthLabel(mois[i], true)} : ${fmt(v)}"
-      style="height:${Math.max(Math.abs(v) / max * 100, 4)}%;--b:${v < 0 ? 'var(--div-neg)' : coul}"></span>`).join('')}</div>`;
-  };
-  const rev = P.map(p => p.revenus), ch = P.map(p => p.charges), res = P.map(p => p.resultat), verse = P.map(p => -p.totaux['Épargne']);
-  const tRev = rev.reduce((s, v) => s + v, 0), taux = tRev > 0 ? res.reduce((s, v) => s + v, 0) / tRev : null;
-  // Capital du crédit immobilier remboursé : compté dans l'épargne, pas dans les charges
-  const capital = -moy(P.map(p => p.parCat.get(normKey('Capital remboursé')) || 0));
-  const dontCapital = capital >= 1 ? `, dont ${eur(capital)} de capital du crédit` : '';
-  // Groupes de charges : coût net moyen (un remboursement net apparaît en négatif, sans barre)
-  const groupes = F.pnlPlan(M).groupes.find(g => g.section === 'Charges').groupes
-    .map(g => ({ nom: g.nom, v: -moy(P.map(p => g.cats.reduce((s, c) => s + (p.parCat.get(normKey(c)) || 0), 0))) }))
-    .filter(g => Math.abs(g.v) >= 1).sort((a, b) => b.v - a.v);
-  const maxG = Math.max(...groupes.map(g => g.v), 1);
-  const ouvert = state.pnlChargesOuvert !== false;
-  const ligne = (lib, vals, coul, val, sousVal, { cls = '', attrs = '' } = {}) => `
-    <div class="pr-ligne ${cls}" ${attrs}><span class="lib">${lib}</span>${vals ? minibars(vals, coul) : '<span></span>'}
-      <span class="val">${val}${sousVal ? `<small>${sousVal}</small>` : ''}</span></div>`;
-  return `<div class="pnl-resume">
-    ${ligne('Revenus', rev, 'var(--series-1)', eur(moy(rev)), 'par mois')}
-    ${ligne(`<span class="chevron ${ouvert ? 'ouvert' : ''}" aria-hidden="true">▸</span> Charges`, ch, 'var(--series-2)', eur(moy(ch)), 'par mois',
-      { cls: 'clic', attrs: 'id="pr-charges" tabindex="0" role="button" aria-expanded="' + ouvert + '" title="Détailler les charges"' })}
-    ${ouvert ? groupes.map(g => `
-      <div class="pr-ligne sous clic" data-groupe="${esc('Charges|' + g.nom)}" tabindex="0" role="button" title="Voir ce groupe mois par mois">
-        <span class="lib">${esc(g.nom)}</span>
-        ${g.v > 0 ? `<div class="barre" style="width:${g.v / maxG * 100}%;--b:var(--series-2);opacity:${0.45 + 0.55 * g.v / maxG}"></div>` : '<span class="small muted">vient en déduction</span>'}
-        <span class="val ${g.v < 0 ? 'pos' : ''}">${g.v < 0 ? eurSigned(-g.v) : eur(g.v)}</span></div>`).join('') : ''}
-    ${ligne('Capacité d’épargne', res, 'var(--series-1)', `<span class="${moy(res) < 0 ? 'neg' : 'pos'}">${eurSigned(moy(res))}</span>`, `taux ${pct(taux)}`, { cls: 'total' })}
-    ${moy(verse) >= 0
-      ? ligne('Versé sur l’épargne', verse, 'var(--series-3)', eur(moy(verse)), 'par mois, net des retraits' + dontCapital)
-      : ligne('Retiré de l’épargne', verse, 'var(--series-3)', eur(-moy(verse)), 'par mois, net des versements' + dontCapital)}
-  </div>
-  <p class="small muted">Moyennes sur ${n} mois complets jusqu’à ${D.monthLabel(fin, true)} ; chaque mini-barre est un mois, le mois choisi en plein (survolez pour le montant). Cliquez sur « Charges » pour replier le détail, sur un groupe pour le voir mois par mois.</p>`;
-}
-
-function tablePnl(M, mk, state) {
-  const mois = D.range(D.addMonths(mk, -11), mk);
-  const P = mois.map(m => F.pnl(M, m));
-  const { groupes } = F.pnlPlan(M);
-  const ouverts = state.pnlOuverts || new Set();
-  const cell = (v, { m, cat, fort } = {}) => {
-    const cls = `num pnl-cell ${v < -0.005 ? 'pnl-neg' : ''} ${fort ? 'strong-cell' : ''} ${cat && Math.abs(v) >= 0.005 ? 'pnl-clic' : ''}`;
-    const attrs = cat && Math.abs(v) >= 0.005 ? ` data-mois="${m}" data-cat="${esc(normKey(cat))}" title="Voir les opérations"` : '';
-    return `<td class="${cls}"${attrs}>${Math.abs(v) < 0.005 ? '<span class="muted">–</span>' : eur(v)}</td>`;
-  };
-  const totaux = vals => { const t = vals.reduce((s, v) => s + v, 0); return `${cell(t, { fort: true })}${cell(t / vals.length)}`; };
-  const ligne = (label, vals, { cls = '', cat = null, groupe = null, ouvert = false, nb = 0 } = {}) =>
-    `<tr class="${cls}"${groupe ? ` data-groupe="${esc(groupe)}" tabindex="0" title="Détailler"` : ''}>
-      <th scope="row">${groupe && nb > 1 ? `<span class="chevron ${ouvert ? 'ouvert' : ''}" aria-hidden="true">▸</span> ` : ''}${esc(label)}</th>
-      ${vals.map((v, i) => cell(v, { m: mois[i], cat })).join('')}${totaux(vals)}</tr>`;
-  const valsCat = c => P.map(p => p.parCat.get(normKey(c)) || 0);
-  const corps = groupes.map(sec => {
-    if (!sec.groupes.length) return '';
-    const lignes = sec.groupes.map(g => {
-      const vals = P.map(p => g.cats.reduce((s, c) => s + (p.parCat.get(normKey(c)) || 0), 0));
-      if (vals.every(v => Math.abs(v) < 0.005)) return '';
-      const cle = sec.section + '|' + g.nom, ouvert = ouverts.has(cle);
-      // Groupe d'une seule catégorie : la ligne elle-même mène aux opérations
-      if (g.cats.length === 1) return ligne(g.nom, vals, { cls: 'pnl-g', cat: g.cats[0] });
-      return ligne(g.nom, vals, { cls: 'pnl-g pnl-groupe', groupe: cle, ouvert, nb: g.cats.length })
-        + (ouvert ? g.cats.map(c => ligne(c, valsCat(c), { cls: 'pnl-c', cat: c })).join('') : '');
-    }).join('');
-    const total = P.map(p => p.totaux[sec.section]);
-    return `<tr class="pnl-section"><th colspan="${mois.length + 3}">${esc(sec.section)}</th></tr>${lignes}
-      ${ligne(sec.section === 'Hors exploitation' ? 'Total hors exploitation' : 'Total ' + sec.section.toLowerCase(), total, { cls: 'pnl-total' })}
-      ${sec.section === 'Charges' ? `${ligne('Capacité d’épargne (revenus − charges)', P.map(p => p.resultat), { cls: 'pnl-resultat' })}
-        <tr class="pnl-taux"><th scope="row">Taux d’épargne</th>${P.map(p => `<td class="num">${pct(p.taux)}</td>`).join('')}
-          <td class="num strong-cell">${pct(P.reduce((s, p) => s + p.revenus, 0) > 0 ? P.reduce((s, p) => s + p.resultat, 0) / P.reduce((s, p) => s + p.revenus, 0) : null)}</td><td></td></tr>` : ''}`;
-  }).join('');
-  return `<div class="table-wrap pnl-wrap"><table class="pnl">
-    <thead><tr><th>en €</th>${mois.map(m => `<th class="num ${m === mk ? 'pnl-sel' : ''}">${D.monthLabel(m)}</th>`).join('')}<th class="num">Total</th><th class="num">Moy./mois</th></tr></thead>
-    <tbody>${corps}
-      ${ligne('Variation du compte courant', P.map(p => p.variation), { cls: 'pnl-resultat' })}</tbody></table></div>
-    <p class="small muted">Montants nets : une dépense est négative, un remboursement (CPAM, mutuelle, ami, note de frais) vient en déduction. La variation du compte courant additionne toutes les sections. Le découpage se règle dans <code>budget.json</code> (section <code>pnl</code>).</p>`;
-}
-
 /* Vue de la page Dépenses : une banque (ses comptes, virements vers vos autres comptes compris, sans budget),
    ou tous les comptes, où les virements entre vos comptes sont neutralisés (retirés des deux côtés) et où
    un compte partagé (quotePart < 1, ex. compte joint) ne compte que pour votre part : ses opérations sont
@@ -1616,111 +1471,136 @@ function vueDepenses(M, banque) {
   const ids = new Set(comptesAvecOps(M, banque).map(c => c.id));
   const transactions = M.transactions.filter(t => ids.has(t.compte));
   const V = { ...M, transactions, internes: transactions.filter(interne), banque, idsBanque: [...ids],
-    budget: { ...M.budget, mensuel: {}, exceptions: {} } };
+    // Les apports du co-titulaire sont une entrée d'argent du compte, pas une baisse de ses dépenses
+    budget: { ...M.budget, mensuel: {}, exceptions: {}, exclues: [...M.budget.exclues, normKey(APPORT_COTITULAIRE)] } };
   delete V._pnlPlan;
   return V;
+}
+
+// Couleur stable de chaque catégorie, d'après son rang dans les dépenses des 12 derniers mois de la vue
+function couleursCategories(M, cm) {
+  const tot = new Map();
+  D.range(D.addMonths(cm, -11), cm).forEach(m => F.depenses(M, m).parCat.forEach((v, k) => tot.set(k, (tot.get(k) || 0) + v.montant)));
+  const c = Charts.colors(), rang = [...tot].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  return k => { const i = rang.indexOf(k); return i < 0 ? c.muted : c.series[i % c.series.length]; };
 }
 
 function pageDepenses(Mtout, state) {
   const banques = banquesDepenses(Mtout);
   const banque = banques.includes(state.banque) ? state.banque : '';
   const M = vueDepenses(Mtout, banque), parBanque = !!banque;
-  const cm = F.moisCourant();
+  const cm = F.moisCourant(), today = D.today();
   const allMonths = F.mois(M).reverse();
   const mk = allMonths.includes(state.mois) ? state.mois : cm;
   const isCurrent = mk === cm;
-  const today = D.today();
   const pace = isCurrent ? Number(today.slice(8, 10)) / D.daysInMonth(mk) : 1;
+  const couleur = couleursCategories(M, cm);
+  const palette = Charts.colors().series;
 
-  const rows = F.lignesBudget(M, mk);
-  const dep = F.depenses(M, mk);
-  const bud = F.budgetTotal(M, mk);
-  const reste = bud - dep.total;
+  // ---- Chiffres du mois ----
+  const dep = F.depenses(M, mk), bud = F.budgetTotal(M, mk), rows = F.lignesBudget(M, mk);
+  const moy3 = k => [1, 2, 3].reduce((a, i) => a + (F.depenses(M, D.addMonths(mk, -i)).parCat.get(k)?.montant || 0), 0) / 3;
+  const dep3 = [1, 2, 3].reduce((a, i) => a + F.depenses(M, D.addMonths(mk, -i)).total, 0) / 3;
   // Projection : pour chaque catégorie, le plus élevé entre le déjà-dépensé et la moyenne des 3 mois précédents
-  // (évite d'extrapoler les charges fixes comme le loyer, déjà payées en début de mois).
-  const projection = isCurrent ? rows.reduce((s, r) => {
-    const moy = [1, 2, 3].reduce((a, i) => a + (F.depenses(M, D.addMonths(mk, -i)).parCat.get(r.key)?.montant || 0), 0) / 3;
-    return s + Math.max(r.spent, moy);
-  }, 0) : null;
-
-  // Revenus, épargne du mois et taux d'épargne (hors catégories exclues du budget)
-  const P = F.pnl(M, mk), rev = P.revenus, epargne = P.resultat, taux = P.taux;
-  const verse = F.versementsEpargne(M, mk);
-  const m12 = D.range(D.addMonths(cm, -12), D.addMonths(cm, -1));
-  const p12 = m12.map(m => F.pnl(M, m)), rev12 = p12.reduce((s, p) => s + p.revenus, 0), res12 = p12.reduce((s, p) => s + p.resultat, 0);
-  const taux12 = rev12 > 0 ? res12 / rev12 : null;
-
-  // Opérations du mois, avec un menu pour changer la catégorie
-  const opsMois = M.transactions.filter(t => D.monthKey(t.date) === mk);
-  const toutesCats = F.categories(Mtout);
-  // Virements entre vos comptes du mois : reçus / envoyés (vue banque) ou neutralisés (tous les comptes)
+  // (les charges fixes déjà payées en début de mois ne sont pas extrapolées)
+  const projection = isCurrent ? rows.reduce((s, r) => s + Math.max(r.spent, moy3(r.key)), 0) : null;
+  const P = F.pnl(M, mk), verse = F.versementsEpargne(M, mk);
+  const ratioBudget = bud > 0 ? dep.total / bud : 0;
   const internesMois = M.internes.filter(t => D.monthKey(t.date) === mk);
   const recuInterne = internesMois.filter(t => t.montant > 0).reduce((s, t) => s + t.montant, 0);
   const envoyeInterne = -internesMois.filter(t => t.montant < 0).reduce((s, t) => s + t.montant, 0);
   const soldeBanque = parBanque ? M.idsBanque.reduce((s, id) => s + F.valeur(M, id, F.dateFin(mk)), 0) : 0;
-  const optionsCat = sel => toutesCats.map(c => `<option ${c === sel ? 'selected' : ''}>${esc(c)}</option>`).join('') + '<option value="__nouvelle">+ Nouvelle catégorie…</option>';
-  const tableOps = list => list.length ? `<div class="table-wrap"><table class="ops-cat"><tbody>${[...list].sort((a, b) => b.date.localeCompare(a.date) || a.montant - b.montant).map(t => `
-    <tr><td class="muted nowrap">${D.fmt(t.date)}</td>
-      <td>${esc(t.libelle)}${t.categorie !== t.categorieOrigine ? ` <span class="tag" title="Catégorie d’origine : ${esc(t.categorieOrigine)}">corrigé</span>` : ''}${t.part ? ` <span class="tag" title="Compte partagé : montant total ${eur(t.montant / t.part, true)}">votre part ${pct(t.part)}</span>` : ''}</td>
-      <td class="num nowrap ${t.montant > 0 ? 'pos' : ''}">${eurSigned(t.montant, true)}</td>
-      <td><label class="select small-select"><span class="sr">Catégorie</span><select class="sel-cat" data-id="${esc(t.id)}">${optionsCat(t.categorie)}</select></label></td></tr>`).join('')}</tbody></table></div>`
-    : UI.empty('Aucune opération.');
+  const nomsComptes = b => comptesAvecOps(Mtout, b).map(c => c.nom).join(', ');
+  const nomCompte = new Map(Mtout.comptes.map(c => [c.id, c.onglet || c.nom]));
 
-  const lignes = rows.map(r => {
-    const ratio = r.budget > 0 ? r.spent / r.budget : (r.spent > 0 ? Infinity : 0);
-    const w = r.budget > 0 ? Math.max(0, Math.min(ratio, 1)) * 100 : r.spent > 0 ? 100 : 0;
-    const ouverte = state.catOuverte === r.key;
-    const detail = opsMois.filter(t => normKey(t.categorie) === r.key);
-    return `<div class="cat-row cat-clic ${ouverte ? 'ouvert' : ''}" data-cat="${esc(r.key)}" tabindex="0" role="button" aria-expanded="${ouverte}" title="Voir les opérations">
-      <div class="cat-name"><span class="chevron" aria-hidden="true">▸</span> ${esc(r.label)}${r.horsBudget && !parBanque ? ' <span class="tag">hors budget</span>' : ''}</div>
-      <div class="cat-bar">
-        <div class="track"><div class="fill ${ratio > 1 ? 'over' : ''} ${r.horsBudget ? 'hb' : ''}" style="width:${w}%"></div>
-        ${isCurrent && r.budget > 0 ? `<div class="pace" style="left:${pace * 100}%"></div>` : ''}</div>
-      </div>
-      <div class="cat-val num"><strong>${eur(r.spent)}</strong> <span class="muted">/ ${r.budget ? eur(r.budget) : '—'}</span></div>
-      <div class="cat-status">${r.budget > 0 ? UI.status(ratio, isCurrent ? pace : 1) : '<span class="muted small">—</span>'}</div>
-    </div>
-    <div class="cat-detail" ${ouverte ? '' : 'hidden'}>${tableOps(detail)}</div>`;
+  // ---- Onglets par banque (une couleur par banque) ----
+  const coulBanque = b => b ? palette[(banques.indexOf(b) + 2) % palette.length] : 'var(--accent)';
+  const onglets = banques.length > 1 ? `<nav class="onglets" aria-label="Comptes">
+    ${['', ...banques].map(b => `<button type="button" class="onglet" data-banque="${esc(b)}" aria-pressed="${b === banque}" ${b ? `style="--c:${coulBanque(b)}"` : ''} title="${b ? esc(nomsComptes(b)) : 'Virements entre vos comptes neutralisés, compte joint à votre part'}">${b ? esc(b) : 'Tous les comptes'}</button>`).join('')}
+  </nav>` : '';
+
+  // ---- Répartition du mois (anneau) : 6 premières catégories, puis « autres » ----
+  let parts = [...dep.parCat].filter(([, v]) => v.montant > 0.5).map(([k, v]) => ({ key: k, label: v.label, v: v.montant, c: couleur(k) })).sort((a, b) => b.v - a.v);
+  if (parts.length > 7) parts = [...parts.slice(0, 6), { label: `${parts.length - 6} autres`, v: parts.slice(6).reduce((s, p) => s + p.v, 0), c: Charts.colors().muted }];
+  const totalParts = parts.reduce((s, p) => s + p.v, 0);
+  const legende = parts.map(p => `<li><span class="pastille" style="background:${p.c}"></span>${esc(p.label)}<span class="val">${eur(p.v)} · ${pct(totalParts ? p.v / totalParts : null)}</span></li>`).join('');
+
+  // ---- Bandeau principal ----
+  const jauge = parBanque ? '' : `
+    <div class="jauge-budget">
+      <div class="track big"><div class="fill ${ratioBudget > 1 ? 'over' : ''}" style="width:${Math.min(ratioBudget, 1) * 100}%"></div>${isCurrent ? `<div class="pace" style="left:${pace * 100}%" title="Avancement du mois"></div>` : ''}</div>
+      <div class="row-between small muted"><span>${pct(ratioBudget)} du budget de ${eur(bud)}</span><span>${bud - dep.total >= 0 ? `reste ${eur(bud - dep.total)}` : `<span class="neg">dépassement de ${eur(dep.total - bud)}</span>`}</span></div>
+    </div>`;
+  const deltas = parBanque
+    ? `<div>${UI.delta(dep.total - dep3, dep3, { invert: true })} <span class="muted">vs moyenne des 3 mois précédents</span></div>
+       <div class="muted">${esc(nomsComptes(banque))} · solde ${isCurrent ? 'actuel' : 'fin de mois'} <strong>${eur(soldeBanque)}</strong></div>`
+    : `<div>${UI.delta(dep.total - dep3, dep3, { invert: true })} <span class="muted">vs moyenne des 3 mois précédents</span></div>
+       ${isCurrent ? `<div><span class="muted">Projection fin de mois</span> <strong>${eur(projection)}</strong> ${UI.delta(projection - bud, null, { invert: true, suffix: 'vs budget' })}</div>` : ''}`;
+  const mini = parBanque ? `
+      ${UI.kpi('Revenus', eur(P.revenus), 'salaire et autres revenus')}
+      ${UI.kpi('Reçu de vos comptes', eur(recuInterne), 'virements depuis vos autres comptes')}
+      ${UI.kpi('Envoyé vers vos comptes', eur(envoyeInterne), 'virements vers vos autres comptes')}` : `
+      ${UI.kpi('Revenus', eur(P.revenus), isCurrent && !P.revenus ? 'pas encore reçus ce mois-ci' : 'salaire et autres revenus')}
+      ${UI.kpi('Capacité d’épargne', `<span class="${P.resultat < 0 ? 'neg' : 'pos'}">${eurSigned(P.resultat)}</span>`, `revenus − dépenses · taux ${pct(P.taux)}`)}
+      ${UI.kpi('Versé sur l’épargne', eur(verse), 'net, capital du crédit compris')}`;
+  const noteInterne = !parBanque && internesMois.length ? `<p class="small muted">${internesMois.length} virements entre vos comptes neutralisés ce mois-ci (${eur(envoyeInterne)} envoyés, ${eur(recuInterne)} reçus).</p>` : '';
+
+  // ---- Tuiles par catégorie ----
+  const sel = state.catOuverte || null;
+  const maxSpent = Math.max(...rows.map(r => r.spent), 1);
+  const tuiles = rows.filter(r => Math.abs(r.spent) >= 0.5 || r.budget > 0).sort((a, b) => b.spent - a.spent || b.budget - a.budget).map(r => {
+    const ratio = r.budget > 0 ? r.spent / r.budget : r.spent / maxSpent, m3 = moy3(r.key);
+    const w = Math.max(0, Math.min(ratio, 1)) * 100, over = r.budget > 0 && r.spent > r.budget;
+    return `<button type="button" class="cat-tuile ${sel === r.key ? 'sel' : ''} ${Math.abs(r.spent) < 0.5 ? 'vide' : ''}" data-cat="${esc(r.key)}" style="--c:${couleur(r.key)}" aria-pressed="${sel === r.key}">
+      <span class="nom"><span class="pastille"></span>${esc(r.label)}</span>
+      <span class="montant ${r.spent < 0 ? 'pos' : ''}">${eur(r.spent)}</span>
+      <span class="jauge"><span class="${over ? 'over' : ''}" style="width:${w}%"></span>${isCurrent && r.budget > 0 ? `<i style="left:${pace * 100}%"></i>` : ''}</span>
+      <span class="detail">${r.budget > 0 ? `budget ${eur(r.budget)}${over ? ' · <b class="neg">dépassé</b>' : ''}` : parBanque ? `${pct(dep.total ? r.spent / dep.total : null)} du mois` : 'hors budget'} · moy. 3 mois ${eur(m3)}</span>
+    </button>`;
   }).join('');
 
-  // Catégories du mois absentes du budget : revenus et mouvements exclus (épargne, virements…), cliquables aussi
-  const clesBudget = new Set(rows.map(r => r.key));
-  const autres = new Map();
+  // Mouvements hors dépenses : revenus, épargne, virements, capital du crédit
+  const opsMois = M.transactions.filter(t => D.monthKey(t.date) === mk);
+  const clesDep = new Set(rows.map(r => r.key)), autres = new Map();
   opsMois.forEach(t => {
     const k = normKey(t.categorie);
-    if (clesBudget.has(k)) return;
-    const a = autres.get(k) || { key: k, label: t.categorie, net: 0, exclue: F.exclue(M, t.categorie) };
-    a.net += t.montant; autres.set(k, a);
+    if (clesDep.has(k)) return;
+    const a = autres.get(k) || { key: k, label: t.categorie, net: 0, n: 0 };
+    a.net += t.montant; a.n++; autres.set(k, a);
   });
-  const ligneAutre = a => {
-    const ouverte = state.catOuverte === a.key;
-    return `<div class="cat-row cat-clic ${ouverte ? 'ouvert' : ''}" data-cat="${esc(a.key)}" tabindex="0" role="button" aria-expanded="${ouverte}" title="Voir les opérations">
-      <div class="cat-name"><span class="chevron" aria-hidden="true">▸</span> ${esc(a.label)}</div>
-      <div class="cat-bar"></div>
-      <div class="cat-val num"><strong class="${a.net > 0 ? 'pos' : ''}">${eurSigned(a.net)}</strong></div>
-      <div class="cat-status"><span class="muted small">${a.exclue ? 'exclu' : a.net > 0 ? 'revenu' : ''}</span></div>
-    </div>
-    <div class="cat-detail" ${ouverte ? '' : 'hidden'}>${tableOps(opsMois.filter(t => normKey(t.categorie) === a.key))}</div>`;
-  };
-  const listeAutres = [...autres.values()].sort((x, y) => (x.exclue - y.exclue) || (y.net - x.net));
-  const lignesAutres = listeAutres.map(ligneAutre).join('');
+  const tuilesHors = [...autres.values()].sort((a, b) => b.net - a.net).map(a => `
+    <button type="button" class="cat-tuile hors ${sel === a.key ? 'sel' : ''}" data-cat="${esc(a.key)}" aria-pressed="${sel === a.key}">
+      <span class="nom">${esc(a.label)}</span>
+      <span class="montant ${a.net > 0 ? 'pos' : ''}">${eurSigned(a.net)}</span>
+      <span class="detail">${a.n} opération${a.n > 1 ? 's' : ''}</span>
+    </button>`).join('');
 
+  // ---- Opérations (filtrées par la catégorie choisie) et changement de catégorie ----
+  const toutesCats = F.categories(Mtout);
+  const optionsCat = c => toutesCats.map(x => `<option ${x === c ? 'selected' : ''}>${esc(x)}</option>`).join('') + '<option value="__nouvelle">+ Nouvelle catégorie…</option>';
+  const liste = (sel ? opsMois.filter(t => normKey(t.categorie) === sel) : opsMois).sort((a, b) => b.date.localeCompare(a.date) || a.montant - b.montant);
+  const labelSel = sel ? (rows.find(r => r.key === sel)?.label || autres.get(sel)?.label || sel) : null;
+  const lignesOps = liste.map(t => `
+    <tr><td class="muted nowrap">${D.fmt(t.date)}</td>
+      <td><span class="pastille" style="background:${couleur(normKey(t.categorie))}"></span> ${esc(t.libelle)}${t.categorie !== t.categorieOrigine ? ` <span class="tag" title="Catégorie d’origine : ${esc(t.categorieOrigine)}">corrigé</span>` : ''}${t.part ? ` <span class="tag" title="Compte partagé : montant total ${eur(t.montant / t.part, true)}">votre part ${pct(t.part)}</span>` : ''}
+        ${parBanque && M.idsBanque.length < 2 ? '' : `<div class="muted small">${esc(nomCompte.get(t.compte) || t.compte)}</div>`}</td>
+      <td class="num nowrap ${t.montant > 0 ? 'pos' : ''}">${eurSigned(t.montant, true)}</td>
+      <td><label class="select small-select"><span class="sr">Catégorie</span><select class="sel-cat" data-id="${esc(t.id)}">${optionsCat(t.categorie)}</select></label></td></tr>`).join('');
   const nbLoc = Corrections.nbLocales();
   const barreCorr = `<div class="corr-bar">
     <label class="check"><input type="checkbox" id="chk-libelle" ${state.toutLibelle !== false ? 'checked' : ''}> Appliquer un changement de catégorie à toutes les opérations du même libellé</label>
     ${nbLoc ? `<span class="corr-status"><span class="status warning">● ${nbLoc} correction${nbLoc > 1 ? 's' : ''} gardée${nbLoc > 1 ? 's' : ''} dans ce navigateur</span>
-      ${M.source === 'github' ? '<button class="btn small primary" id="btn-corr-save">Enregistrer sur GitHub</button>' : ''}
+      ${Mtout.source === 'github' ? '<button class="btn small primary" id="btn-corr-save">Enregistrer sur GitHub</button>' : ''}
       <button class="btn small" id="btn-corr-dl">Télécharger categories.json</button>
       <button class="btn small ghost" id="btn-corr-reset">Annuler</button></span>` : ''}
     ${state.corrMsg ? `<span class="small ${state.corrMsg.ok ? 'pos' : 'neg'}">${esc(state.corrMsg.texte)}</span>` : ''}
   </div>`;
 
-  // Historique sur 6 mois par catégorie
+  // ---- Historique 6 mois par catégorie ----
   const hist = D.range(D.addMonths(mk, -5), mk);
-  const cats = new Map();
-  hist.forEach(m => F.lignesBudget(M, m).forEach(r => { if (!cats.has(r.key)) cats.set(r.key, r.label); }));
   const histData = hist.map(m => new Map(F.lignesBudget(M, m).map(r => [r.key, r])));
-  const histRows = [...cats].map(([k, label]) => `<tr><th scope="row">${esc(label)}</th>${histData.map(h => {
+  const cats = new Map(); histData.forEach(h => h.forEach((r, k) => { if (!cats.has(k)) cats.set(k, r.label); }));
+  const histRows = [...cats].map(([k, label]) => `<tr><th scope="row"><span class="pastille" style="background:${couleur(k)}"></span> ${esc(label)}</th>${histData.map(h => {
     const r = h.get(k);
     if (!r || (!r.spent && !r.budget)) return '<td class="num muted">—</td>';
     const over = r.budget > 0 && r.spent > r.budget;
@@ -1728,106 +1608,83 @@ function pageDepenses(Mtout, state) {
   }).join('')}</tr>`).join('');
   const histTotals = hist.map(m => {
     const t = F.depenses(M, m).total, b = F.budgetTotal(M, m);
-    if (parBanque) return `<td class="num">${eur(t)}</td>`;
-    return `<td class="num ${t > b ? 'over-cell' : ''}">${t > b ? '<span class="ico">▲</span> ' : ''}${eur(t)}<div class="muted small">/ ${eur(b)}</div></td>`;
+    return parBanque ? `<td class="num">${eur(t)}</td>` : `<td class="num ${t > b ? 'over-cell' : ''}">${eur(t)}<div class="muted small">/ ${eur(b)}</div></td>`;
   }).join('');
 
   const options = allMonths.map(m => `<option value="${m}" ${m === mk ? 'selected' : ''}>${D.monthLabel(m, true)}${m === cm ? ' (en cours)' : ''}</option>`).join('');
-
-  const nomsComptes = b => comptesAvecOps(Mtout, b).map(c => c.nom).join(', ');
-  const onglets = banques.length > 1 ? `<nav class="onglets" aria-label="Comptes">
-    ${['', ...banques].map(b => `<button type="button" class="onglet" data-banque="${esc(b)}" aria-pressed="${b === banque}" title="${b ? esc(nomsComptes(b)) : 'Virements entre vos comptes neutralisés'}">${b ? esc(b) : 'Tous les comptes'}</button>`).join('')}
-  </nav>` : '';
-  const kpisBudget = parBanque ? `
-        ${UI.kpi('Dépensé', eur(dep.total), `${esc(nomsComptes(banque))} · ${isCurrent ? `au ${D.fmt(today)}` : D.monthLabel(mk, true)}`)}
-        ${UI.kpi('Reçu de vos comptes', eur(recuInterne), 'virements depuis vos autres comptes')}
-        ${UI.kpi('Envoyé vers vos comptes', eur(envoyeInterne), 'virements vers vos autres comptes')}
-        ${UI.kpi(isCurrent ? 'Solde actuel' : 'Solde fin de mois', eur(soldeBanque), banque)}` : `
-        ${UI.kpi('Dépensé', eur(dep.total), isCurrent ? `au ${D.fmt(today)} · ${pct(pace)} du mois écoulé` : D.monthLabel(mk, true))}
-        ${UI.kpi('Budget', eur(bud), `${rows.filter(r => r.budget > 0).length} catégories`)}
-        ${UI.kpi(reste >= 0 ? 'Reste à dépenser' : 'Dépassement', `<span class="${reste < 0 ? 'neg' : ''}">${eur(Math.abs(reste))}</span>`, `${pct(bud ? dep.total / bud : null)} du budget consommé`)}
-        ${isCurrent
-          ? UI.kpi('Projection fin de mois', eur(projection), `d’après les 3 derniers mois · ${UI.delta(projection - bud, null, { invert: true, suffix: 'vs budget' })}`)
-          : UI.kpi('Écart au budget', UI.delta(dep.total - bud, bud, { invert: true }), 'positif = dépassement')}`;
-  const ecartInterne = recuInterne - envoyeInterne;
-  const noteInterne = !parBanque && internesMois.length ? `<p class="small muted note-interne">${internesMois.length} virements entre vos comptes neutralisés ce mois-ci (${eur(envoyeInterne)} envoyés, ${eur(recuInterne)} reçus${Math.abs(ecartInterne) >= 0.5 ? ` · écart ${eurSigned(ecartInterne)}, virement pas encore arrivé ou compte non suivi` : ''}).</p>` : '';
-
+  const coulVue = parBanque ? coulBanque(banque) : 'var(--series-2)';
   const html = `
     <div class="page-h">
       <h1>Dépenses</h1>
       <label class="select"><span class="sr">Mois</span><select id="sel-mois">${options}</select></label>
     </div>
     ${onglets}
-    ${barreCorr}
     <div class="grid">
-      <section class="card span-12"><div class="kpis four">${kpisBudget}
-      </div>
-      <div class="kpis four kpis-2">
-        ${UI.kpi('Revenus', eur(rev), isCurrent && !rev ? 'pas encore reçus ce mois-ci' : 'section Revenus du P&L')}
-        ${parBanque ? `
-        ${UI.kpi('Charges', eur(P.charges), 'nettes des remboursements')}
-        ${UI.kpi('Variation du solde', `<span class="${P.variation < 0 ? 'neg' : 'pos'}">${eurSigned(P.variation)}</span>`, 'toutes opérations, virements compris')}` : `
-        ${UI.kpi('Capacité d’épargne', `<span class="${epargne < 0 ? 'neg' : 'pos'}">${eurSigned(epargne)}</span>`, `revenus − charges (${eur(P.charges)})`)}
-        ${UI.kpi('Taux d’épargne', pct(taux), `moyenne des 12 derniers mois : ${pct(taux12)}`)}`}
-        ${UI.kpi('Versé sur l’épargne', eur(verse), 'net, vers livrets, assurance vie…')}
-      </div>${noteInterne}</section>
+      <section class="card epargne-hero span-12" style="--hero-tint: color-mix(in srgb, ${coulVue} 22%, transparent)">
+        <div>
+          <div class="kpi-label">Dépensé · ${D.monthLabel(mk, true)}${parBanque ? ` · ${esc(banque)}` : ''}${isCurrent ? ` · au ${D.fmt(today)}` : ''}</div>
+          <div class="hero-value">${eur(dep.total)}</div>
+          ${jauge}
+          <div class="hero-deltas">${deltas}</div>
+          <div class="kpis hero-kpis">${mini}</div>
+          ${UI.chart('ch-mois', 190)}
+          <p class="small muted">Dépenses des 12 derniers mois${parBanque ? '' : ' (barres) et budget (pointillés)'} ; le mois choisi en plein.</p>
+          ${noteInterne}
+        </div>
+        <div class="donut-wrap">
+          ${parts.length ? UI.chart('ch-repartition', 200) : ''}
+          <div class="small muted">${parts.length ? 'Répartition du mois par catégorie' : 'Aucune dépense ce mois-ci'}</div>
+          <ul class="legende">${legende}</ul>
+        </div>
+      </section>
 
-      ${UI.card('Des revenus à l’épargne', UI.chart('ch-waterfall', 320), { sub: `${D.monthLabel(mk, true)} · revenus, puis chaque groupe de charges du P&L, jusqu’à ce qui reste`, cls: 'span-12' })}
+      <section class="span-12">
+        <div class="titre-section"><h2>Catégories</h2><span class="muted small">Cliquez sur une catégorie pour voir ses opérations et en changer la catégorie</span></div>
+        <div class="cat-tuiles">${tuiles || UI.empty('Aucune dépense pour ce mois.')}</div>
+        ${tuilesHors ? `<div class="titre-section sous"><h3>Hors dépenses</h3><span class="muted small">revenus, épargne, virements, capital du crédit</span></div><div class="cat-tuiles petites">${tuilesHors}</div>` : ''}
+      </section>
 
-      ${state.pnlDetail
-        ? UI.card('P&L mensuel', tablePnl(M, mk, state), { sub: '12 mois jusqu’au mois sélectionné · cliquez sur un groupe pour le détailler, sur un montant pour voir ses opérations', cls: 'span-12',
-          actions: '<button type="button" class="btn small" id="btn-pnl-vue">Revenir au résumé</button>' })
-        : UI.card('P&L', pnlResume(M, mk, state), { sub: 'Moyennes mensuelles sur les 12 derniers mois complets', cls: 'span-12',
-          actions: '<button type="button" class="btn small" id="btn-pnl-vue">Voir le détail mensuel</button>' })}
+      ${UI.card(sel ? `Opérations · ${esc(labelSel)}` : 'Toutes les opérations du mois', `${barreCorr}
+        ${liste.length ? `<div class="table-wrap ops-wrap"><table class="ops-cat"><tbody>${lignesOps}</tbody></table></div>` : UI.empty('Aucune opération.')}`,
+        { sub: `${D.monthLabel(mk, true)} · ${liste.length} opération${liste.length > 1 ? 's' : ''}${sel ? ` · ${eurSigned(liste.reduce((s, t) => s + t.montant, 0))}` : ''}`, cls: 'span-12', actions: sel ? '<button type="button" class="btn small" id="btn-toutes">Toutes les catégories</button>' : '' })}
 
-      ${UI.card('Budget par catégorie', `<div class="cats">${lignes || UI.empty('Aucune dépense pour ce mois.')}</div>
-        ${lignesAutres ? `<h3 class="cats-titre">Revenus et mouvements hors budget</h3><div class="cats">${lignesAutres}</div>` : ''}
-        <p class="legend-note small muted">${isCurrent ? '<span class="pace-key"></span> repère : avancement du mois · ' : ''}Cliquez sur une catégorie pour voir ses opérations et en changer la catégorie.</p>`,
-        { sub: D.monthLabel(mk, true), cls: 'span-12' })}
+      ${UI.card('Dépenses par catégorie', UI.chart('ch-cats', 280), { sub: '12 derniers mois, 6 premières catégories et les autres', cls: parBanque ? 'span-12' : 'span-8' })}
+      ${parBanque ? '' : UI.card('Capacité d’épargne', UI.chart('ch-epargne', 280), { sub: 'Revenus − dépenses, 12 derniers mois (taux au survol)', cls: 'span-4' })}
 
-      ${UI.card(parBanque ? 'Dépenses mensuelles' : 'Dépenses mensuelles vs budget', UI.chart('ch-mois', 280), { sub: '12 derniers mois (hors virements d’épargne)', cls: 'span-7' })}
-      ${UI.card('Capacité d’épargne mensuelle', UI.chart('ch-epargne', 280), { sub: 'Revenus − charges du P&L, 12 derniers mois (taux au survol)', cls: 'span-5' })}
-
-      ${UI.card('Historique par catégorie', `<div class="table-wrap"><table class="hist">
+      ${UI.repli('historique', 'Historique par catégorie', `<div class="table-wrap"><table class="hist">
         <thead><tr><th>Catégorie</th>${hist.map(m => `<th class="num">${D.monthLabel(m)}</th>`).join('')}</tr></thead>
         <tbody>${histRows}</tbody>
         <tfoot><tr><th scope="row">Total</th>${histTotals}</tr></tfoot></table></div>
-        <p class="small muted"><span class="status critical">▲</span> montant supérieur au budget de la catégorie</p>`, { sub: '6 mois jusqu’au mois sélectionné', cls: 'span-12' })}
+        ${parBanque ? '' : '<p class="small muted"><span class="status critical">▲</span> montant supérieur au budget de la catégorie</p>'}`, { sub: '6 mois jusqu’au mois choisi', state })}
     </div>`;
 
   return { html, after() {
-    document.getElementById('sel-mois').addEventListener('change', e => { state.mois = e.target.value; App.render(); });
+    document.getElementById('sel-mois').addEventListener('change', e => { state.mois = e.target.value; App.render({ garderScroll: true }); });
     document.getElementById('chk-libelle').addEventListener('change', e => { state.toutLibelle = e.target.checked; });
-    document.querySelectorAll('.onglet').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.onglet[data-banque]').forEach(b => b.addEventListener('click', () => {
       state.banque = b.dataset.banque; state.catOuverte = null; App.render({ garderScroll: true });
     }));
-
-    // Clic sur une catégorie : affiche / masque ses opérations
-    document.querySelectorAll('.cat-clic').forEach(row => {
-      const basculer = () => {
-        const d = row.nextElementSibling, ouvrir = d.hidden;
-        document.querySelectorAll('.cat-detail').forEach(x => { x.hidden = true; x.previousElementSibling.classList.remove('ouvert'); x.previousElementSibling.setAttribute('aria-expanded', 'false'); });
-        d.hidden = !ouvrir; row.classList.toggle('ouvert', ouvrir); row.setAttribute('aria-expanded', String(ouvrir));
-        state.catOuverte = ouvrir ? row.dataset.cat : null;
-      };
-      row.addEventListener('click', basculer);
-      row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); basculer(); } });
-    });
+    // Tuile : filtre les opérations sur sa catégorie (un second clic retire le filtre)
+    document.querySelectorAll('.cat-tuile').forEach(b => b.addEventListener('click', () => {
+      state.catOuverte = state.catOuverte === b.dataset.cat ? null : b.dataset.cat; App.render({ garderScroll: true });
+      if (state.catOuverte) document.querySelector('.corr-bar')?.closest('.card')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }));
+    document.getElementById('btn-toutes')?.addEventListener('click', () => { state.catOuverte = null; App.render({ garderScroll: true }); });
+    UI.suivreReplis(state);
 
     // Changement de catégorie
     const parId = new Map(Mtout.transactions.map(t => [t.id, t]));
-    document.querySelectorAll('.sel-cat').forEach(sel => sel.addEventListener('change', () => {
-      const t = parId.get(sel.dataset.id);
-      let cat = sel.value;
+    document.querySelectorAll('.sel-cat').forEach(s => s.addEventListener('change', () => {
+      const t = parId.get(s.dataset.id);
+      let cat = s.value;
       if (cat === '__nouvelle') {
         cat = (prompt('Nom de la nouvelle catégorie :') || '').trim();
-        if (!cat) { sel.value = t.categorie; return; }
+        if (!cat) { s.value = t.categorie; return; }
       }
       Corrections.changer(Mtout, t, cat, state.toutLibelle !== false);
       state.corrMsg = null;
       App.render({ garderScroll: true });
     }));
-
     // Enregistrement des corrections
     const save = document.getElementById('btn-corr-save');
     if (save) save.addEventListener('click', async () => {
@@ -1843,65 +1700,35 @@ function pageDepenses(Mtout, state) {
       }
       App.render({ garderScroll: true });
     });
-    const dl = document.getElementById('btn-corr-dl');
-    if (dl) dl.addEventListener('click', () => {
+    document.getElementById('btn-corr-dl')?.addEventListener('click', () => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([Corrections.texte(Mtout)], { type: 'application/json' }));
       a.download = 'categories.json'; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     });
-    const reset = document.getElementById('btn-corr-reset');
-    if (reset) reset.addEventListener('click', () => {
+    document.getElementById('btn-corr-reset')?.addEventListener('click', () => {
       if (!confirm('Annuler les corrections non enregistrées ?')) return;
       Corrections.effacerLocales(); Corrections.appliquer(Mtout); state.corrMsg = null;
       App.render({ garderScroll: true });
     });
 
-    // Waterfall : revenus, puis chaque groupe de charges du P&L (net), jusqu'à la capacité d'épargne
-    const groupesCharges = F.pnlPlan(M).groupes.find(g => g.section === 'Charges').groupes
-      .map(g => ({ label: g.nom, value: g.cats.reduce((s, c) => s + (P.parCat.get(normKey(c)) || 0), 0) }))
-      .filter(g => Math.abs(g.value) >= 0.5).sort((a, b) => a.value - b.value);
-    Charts.waterfall(document.getElementById('ch-waterfall'), [
-      { label: 'Revenus', value: rev, total: true },
-      ...groupesCharges,
-      { label: epargne >= 0 ? 'Capacité d’épargne' : 'Déficit', value: epargne, total: true, fin: true },
-    ]);
-
-    // P&L : ouvrir / fermer un groupe ; clic sur un montant de catégorie → ses opérations du mois
-    // P&L : bascule résumé / détail ; dans le résumé, « Charges » se replie, un groupe ouvre le détail sur lui
-    document.getElementById('btn-pnl-vue')?.addEventListener('click', () => { state.pnlDetail = !state.pnlDetail; App.render({ garderScroll: true }); });
-    const prCharges = document.getElementById('pr-charges');
-    if (prCharges) {
-      const basculer = () => { state.pnlChargesOuvert = state.pnlChargesOuvert === false; App.render({ garderScroll: true }); };
-      prCharges.addEventListener('click', basculer);
-      prCharges.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); basculer(); } });
+    // Graphiques
+    if (parts.length) Charts.donut(document.getElementById('ch-repartition'), parts.map(p => p.label), parts.map(p => p.v), parts.map(p => p.c));
+    const months = D.range(D.addMonths(mk, -11), mk), labels = months.map(m => D.monthLabel(m));
+    const depM = months.map(m => F.depenses(M, m));
+    Charts.barsWithLine(document.getElementById('ch-mois'), labels, { label: 'Dépenses', data: depM.map(d => d.total) },
+      parBanque ? null : { label: 'Budget', data: months.map(m => F.budgetTotal(M, m)) }, { highlightLast: isCurrent });
+    const totCat = new Map();
+    depM.forEach(d => d.parCat.forEach((v, k) => totCat.set(k, { label: v.label, t: (totCat.get(k)?.t || 0) + v.montant })));
+    const top = [...totCat].sort((a, b) => b[1].t - a[1].t).slice(0, 6);
+    const series = top.map(([k, v]) => ({ label: v.label, color: couleur(k), data: depM.map(d => Math.max(0, d.parCat.get(k)?.montant || 0)) }));
+    series.push({ label: 'Autres', color: Charts.colors().muted, data: depM.map((d, i) => Math.max(0, d.total - series.reduce((s, x) => s + x.data[i], 0))) });
+    Charts.stackedBars(document.getElementById('ch-cats'), labels, series, { highlight: months.length - 1 });
+    if (!parBanque) {
+      const pM = months.map(m => F.pnl(M, m)), revM = pM.map(p => p.revenus), epM = pM.map(p => p.resultat);
+      Charts.signedBars(document.getElementById('ch-epargne'), labels, 'Épargne', epM,
+        { tooltip: { label: ctx => ` Épargne : ${eurSigned(ctx.parsed.y)} · taux ${pct(revM[ctx.dataIndex] > 0 ? epM[ctx.dataIndex] / revM[ctx.dataIndex] : null)}` } });
     }
-    document.querySelectorAll('.pr-ligne.sous[data-groupe]').forEach(el => {
-      const ouvrir = () => { (state.pnlOuverts || (state.pnlOuverts = new Set())).add(el.dataset.groupe); state.pnlDetail = true; App.render({ garderScroll: true }); };
-      el.addEventListener('click', ouvrir);
-      el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrir(); } });
-    });
-    document.querySelectorAll('.pnl-groupe').forEach(tr => tr.addEventListener('click', () => {
-      const ouverts = state.pnlOuverts || (state.pnlOuverts = new Set()), k = tr.dataset.groupe;
-      ouverts.has(k) ? ouverts.delete(k) : ouverts.add(k);
-      App.render({ garderScroll: true });
-    }));
-    document.querySelectorAll('.pnl-cell[data-cat]').forEach(td => td.addEventListener('click', e => {
-      e.stopPropagation();
-      state.mois = td.dataset.mois; state.catOuverte = td.dataset.cat;
-      App.render();
-      const row = document.querySelector(`.cat-clic[data-cat="${CSS.escape(td.dataset.cat)}"]`);
-      if (row) row.scrollIntoView({ block: 'center' });
-    }));
-
-    const months = D.range(D.addMonths(cm, -11), cm);
-    Charts.barsWithLine(document.getElementById('ch-mois'), months.map(m => D.monthLabel(m)),
-      { label: 'Dépenses', data: months.map(m => F.depenses(M, m).total) },
-      parBanque ? null : { label: 'Budget', data: months.map(m => F.budgetTotal(M, m)) },
-      { highlightLast: true });
-    const pM = months.map(m => F.pnl(M, m)), revM = pM.map(p => p.revenus), epM = pM.map(p => p.resultat);
-    Charts.signedBars(document.getElementById('ch-epargne'), months.map(m => D.monthLabel(m)), 'Épargne', epM,
-      { label: ctx => ` Épargne : ${eurSigned(ctx.parsed.y)} · taux ${pct(revM[ctx.dataIndex] > 0 ? epM[ctx.dataIndex] / revM[ctx.dataIndex] : null)}` });
   } };
 }
 
