@@ -657,6 +657,23 @@ function buildModel(raw, source) {
     return bien;
   });
 
+  // Échéances de prêt : le capital remboursé réduit la dette, c'est de l'épargne ; seuls les intérêts restent
+  // une charge. Chaque prélèvement du montant de la mensualité (catégorie « Crédit immobilier ») est scindé
+  // d'après l'échéancier : la part de capital devient une opération « Capital remboursé ».
+  immobilier.forEach(b => {
+    const mens = parseNum(b.pret?.mensualite);
+    if (!mens) return;
+    const jours = (x, y) => Math.abs(new Date(x) - new Date(y)) / 864e5;
+    transactions.filter(t => normKey(t.categorie) === normKey('Crédit immobilier') && Math.abs(t.montant + mens) < 0.01).forEach(t => {
+      const e = b.echeancier.find(e => jours(e.date, t.date) <= 10);
+      if (!e) return;
+      t.montant = Math.round((t.montant + e.capital) * 100) / 100;
+      transactions.push({ id: t.id + '|capital', date: t.date, montant: -e.capital, libelle: `${t.libelle} (capital)`,
+        categorie: 'Capital remboursé', categorieOrigine: 'Capital remboursé', compte: t.compte });
+    });
+  });
+  transactions.sort((a, b) => a.date.localeCompare(b.date));
+
   const M = { comptes, soldes, transactions, budget, positions, operations, immobilier, source, chargeLe: new Date(), warnings, parCompte: {}, parLigne: {} };
   comptes.forEach(c => { M.parCompte[c.id] = []; });
   soldes.forEach(s => M.parCompte[s.compte].push(s));
@@ -813,11 +830,14 @@ const F = {
     return out;
   },
   budgetTotal: (M, mk) => [...F.budget(M, mk).values()].reduce((s, b) => s + b.montant, 0),
+  // Dépenses nettes par catégorie, comme dans le P&L : un remboursement (montant positif dans une catégorie
+  // de charges, ex. des places de tennis remboursées) vient en déduction. Revenus et catégories exclues à part.
   depenses(M, mk) {
-    const parCat = new Map(); const items = []; let total = 0;
+    const { plan } = F.pnlPlan(M), parCat = new Map(), items = []; let total = 0;
     for (const t of M.transactions) {
-      if (t.montant >= 0 || D.monthKey(t.date) !== mk || F.exclue(M, t.categorie)) continue;
+      if (D.monthKey(t.date) !== mk || F.exclue(M, t.categorie)) continue;
       const k = normKey(t.categorie);
+      if (plan.get(k)?.section === 'Revenus') continue;
       if (!parCat.has(k)) parCat.set(k, { label: t.categorie, montant: 0 });
       parCat.get(k).montant += -t.montant;
       total += -t.montant;
@@ -826,8 +846,8 @@ const F = {
     return { total, parCat, items };
   },
   revenus(M, mk) {
-    let total = 0;
-    for (const t of M.transactions) if (t.montant > 0 && D.monthKey(t.date) === mk && !F.exclue(M, t.categorie)) total += t.montant;
+    const { plan } = F.pnlPlan(M); let total = 0;
+    for (const t of M.transactions) if (D.monthKey(t.date) === mk && plan.get(normKey(t.categorie))?.section === 'Revenus') total += t.montant;
     return total;
   },
   /* P&L mensuel (budget.json → "pnl") : sections Revenus / Charges / Épargne / Hors exploitation,
@@ -1479,6 +1499,9 @@ function pnlResume(M, mk, state) {
   };
   const rev = P.map(p => p.revenus), ch = P.map(p => p.charges), res = P.map(p => p.resultat), verse = P.map(p => -p.totaux['Épargne']);
   const tRev = rev.reduce((s, v) => s + v, 0), taux = tRev > 0 ? res.reduce((s, v) => s + v, 0) / tRev : null;
+  // Capital du crédit immobilier remboursé : compté dans l'épargne, pas dans les charges
+  const capital = -moy(P.map(p => p.parCat.get(normKey('Capital remboursé')) || 0));
+  const dontCapital = capital >= 1 ? `, dont ${eur(capital)} de capital du crédit` : '';
   // Groupes de charges : coût net moyen (un remboursement net apparaît en négatif, sans barre)
   const groupes = F.pnlPlan(M).groupes.find(g => g.section === 'Charges').groupes
     .map(g => ({ nom: g.nom, v: -moy(P.map(p => g.cats.reduce((s, c) => s + (p.parCat.get(normKey(c)) || 0), 0))) }))
@@ -1499,8 +1522,8 @@ function pnlResume(M, mk, state) {
         <span class="val ${g.v < 0 ? 'pos' : ''}">${g.v < 0 ? eurSigned(-g.v) : eur(g.v)}</span></div>`).join('') : ''}
     ${ligne('Capacité d’épargne', res, 'var(--series-1)', `<span class="${moy(res) < 0 ? 'neg' : 'pos'}">${eurSigned(moy(res))}</span>`, `taux ${pct(taux)}`, { cls: 'total' })}
     ${moy(verse) >= 0
-      ? ligne('Versé sur l’épargne', verse, 'var(--series-3)', eur(moy(verse)), 'par mois, net des retraits')
-      : ligne('Retiré de l’épargne', verse, 'var(--series-3)', eur(-moy(verse)), 'par mois, net des versements')}
+      ? ligne('Versé sur l’épargne', verse, 'var(--series-3)', eur(moy(verse)), 'par mois, net des retraits' + dontCapital)
+      : ligne('Retiré de l’épargne', verse, 'var(--series-3)', eur(-moy(verse)), 'par mois, net des versements' + dontCapital)}
   </div>
   <p class="small muted">Moyennes sur ${n} mois complets jusqu’à ${D.monthLabel(fin, true)} ; chaque mini-barre est un mois, le mois choisi en plein (survolez pour le montant). Cliquez sur « Charges » pour replier le détail, sur un groupe pour le voir mois par mois.</p>`;
 }
@@ -1630,7 +1653,7 @@ function pageDepenses(Mtout, state) {
 
   const lignes = rows.map(r => {
     const ratio = r.budget > 0 ? r.spent / r.budget : (r.spent > 0 ? Infinity : 0);
-    const w = r.budget > 0 ? Math.min(ratio, 1) * 100 : 100;
+    const w = r.budget > 0 ? Math.max(0, Math.min(ratio, 1)) * 100 : r.spent > 0 ? 100 : 0;
     const ouverte = state.catOuverte === r.key;
     const detail = opsMois.filter(t => normKey(t.categorie) === r.key);
     return `<div class="cat-row cat-clic ${ouverte ? 'ouvert' : ''}" data-cat="${esc(r.key)}" tabindex="0" role="button" aria-expanded="${ouverte}" title="Voir les opérations">
