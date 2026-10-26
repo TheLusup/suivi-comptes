@@ -120,6 +120,59 @@ main { max-width: 1320px; margin: 0 auto; padding: 28px 32px 48px 136px; }
 .onglet[aria-pressed="true"] { background: var(--text); color: var(--page); }
 .note-interne { margin: 12px 0 0; }
 tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
+/* Sections repliables */
+.repli > summary { list-style: none; cursor: pointer; margin-bottom: 0; }
+.repli > summary::-webkit-details-marker { display: none; }
+.repli > summary .chevron { color: var(--muted); font-size: 18px; transition: transform .15s; }
+.repli[open] > summary { margin-bottom: 16px; }
+.repli[open] > summary .chevron { transform: rotate(90deg); }
+.repli > summary:hover h2 { color: var(--text); }
+
+/* Épargne : bloc principal, anneau, cartes par support */
+.epargne-hero { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: center;
+  background: linear-gradient(135deg, var(--hero-tint, rgba(79, 107, 255, .2)), transparent 60%), var(--surface); }
+.epargne-hero .hero-value { margin: 4px 0 6px; }
+.donut-wrap { display: grid; gap: 14px; justify-items: center; }
+.donut-wrap .chart { width: 200px; }
+.legende { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; width: 100%; font-size: 13px; }
+.legende li { display: flex; align-items: center; gap: 8px; }
+.legende .pastille { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.legende .val { margin-left: auto; color: var(--text-2); }
+.supports { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.support { all: unset; box-sizing: border-box; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 14px 16px; border-top: 4px solid var(--c); display: grid; gap: 2px; }
+.support:hover { background: var(--surface-2); }
+.support:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.support .nom { font-size: 13px; color: var(--text-2); font-weight: 600; }
+.support .montant { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.support .detail { font-size: 12px; color: var(--muted); }
+.onglet[aria-pressed="true"][style*="--c"] { background: var(--c); color: #fff; }
+
+/* Dépenses : P&L résumé */
+.pnl-resume { display: grid; gap: 4px; }
+.pr-ligne { display: grid; grid-template-columns: 210px minmax(0, 1fr) 120px; gap: 16px; align-items: center; padding: 10px 4px; border-radius: 10px; }
+.pr-ligne.clic { cursor: pointer; }
+.pr-ligne.clic:hover { background: var(--surface-2); }
+.pr-ligne .lib { font-weight: 600; }
+.pr-ligne .chevron { display: inline-block; color: var(--muted); transition: transform .15s; }
+.pr-ligne .chevron.ouvert { transform: rotate(90deg); }
+.pr-ligne .val { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pr-ligne .val small { display: block; font-weight: 500; font-size: 11px; color: var(--muted); }
+.pr-ligne.sous { padding: 6px 4px 6px 28px; grid-template-columns: 182px minmax(0, 1fr) 120px; }
+.pr-ligne.sous .lib { font-weight: 500; color: var(--text-2); font-size: 13px; }
+.pr-ligne.sous .val { font-weight: 600; font-size: 13px; }
+.pr-ligne.total { border-top: 1px solid var(--border); border-radius: 0; margin-top: 6px; padding-top: 14px; }
+.minibars { display: flex; align-items: flex-end; gap: 4px; height: 34px; }
+.minibars span { flex: 1; min-width: 4px; border-radius: 3px 3px 0 0; background: var(--b); opacity: .55; }
+.minibars span.sel { opacity: 1; }
+.barre { height: 10px; border-radius: 6px; background: var(--b); }
+.pr-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+@media (max-width: 760px) {
+  .epargne-hero { grid-template-columns: 1fr; }
+  .pr-ligne { grid-template-columns: 110px minmax(0, 1fr) 90px; gap: 10px; }
+  .pr-ligne.sous { grid-template-columns: 96px minmax(0, 1fr) 90px; padding-left: 14px; }
+}
+
 /* Points d'attention (vue d'ensemble) */
 .attentions { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .attention { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: var(--surface-2); border-radius: var(--radius-sm); }
@@ -1126,6 +1179,25 @@ const Charts = {
     return this.make(canvas, { type: 'bar', data: { labels, datasets }, options: this.options(c) });
   },
 
+  // Anneau de répartition (légende tracée à côté en HTML).
+  donut(canvas, labels, data, colors) {
+    const c = this.colors();
+    return this.make(canvas, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: c.surface, borderWidth: 3, hoverOffset: 6 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false, cutout: '68%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: c.surface3, titleColor: c.text, bodyColor: c.text2, padding: 12, cornerRadius: 12, borderColor: c.axis, borderWidth: 1,
+            callbacks: { label: ctx => { const t = ctx.dataset.data.reduce((s, v) => s + v, 0); return ` ${eur(ctx.parsed)} · ${pct(t ? ctx.parsed / t : null)}`; } },
+          },
+        },
+      },
+    });
+  },
+
   // Barres empilées (une série par composante, ex. capital / intérêts / assurance par année).
   stackedBars(canvas, labels, series, { highlight = -1 } = {}) {
     const c = this.colors();
@@ -1225,6 +1297,20 @@ const UI = {
     return '<span class="status good">✓ OK</span>';
   },
   chart: (id, h = 280) => `<div class="chart" style="height:${h}px"><canvas id="${id}"></canvas></div>`,
+  // Section repliable (fermée par défaut) ; son état ouvert est retenu dans state.replis entre deux rendus
+  // (ouvert : ouverte par défaut, tant que l'utilisateur ne l'a pas refermée)
+  repli: (id, title, body, { sub = '', cls = 'span-12', state, ouvert = false } = {}) => `
+    <details class="card repli ${cls}" data-repli="${esc(id)}" ${state?.replis?.has(id) || (ouvert && !state?.replisFermes?.has(id)) ? 'open' : ''}>
+      <summary class="card-h"><div><h2>${title}</h2>${sub ? `<p class="card-sub">${sub}</p>` : ''}</div><span class="chevron" aria-hidden="true">▸</span></summary>
+      ${body}
+    </details>`,
+  // Mémorise l'ouverture des sections repliables d'une page
+  suivreReplis(state) {
+    document.querySelectorAll('details[data-repli]').forEach(d => d.addEventListener('toggle', () => {
+      const o = state.replis || (state.replis = new Set()), f = state.replisFermes || (state.replisFermes = new Set()), k = d.dataset.repli;
+      if (d.open) { o.add(k); f.delete(k); } else { o.delete(k); f.add(k); }
+    }));
+  },
   empty: msg => `<p class="muted center pad">${msg}</p>`,
 };
 
@@ -1376,6 +1462,47 @@ function pageOverview(M) {
 
 /* ---------- Dépenses ---------- */
 // P&L mensuel : une colonne par mois (12 mois jusqu'à mk), une ligne par groupe (dépliable en catégories)
+// P&L résumé : revenus, charges (dépliables en groupes triés), capacité d'épargne et versements vers
+// l'épargne, en moyennes mensuelles sur 12 mois, avec une mini-barre par mois (le mois choisi en plein).
+function pnlResume(M, mk, state) {
+  // Le mois en cours, incomplet, fausserait les moyennes : on s'arrête alors au mois précédent
+  const fin = mk === F.moisCourant() ? D.addMonths(mk, -1) : mk;
+  const mois = D.range(D.addMonths(fin, -11), fin).filter(m => m >= F.premierMois(M));
+  if (!mois.length) return UI.empty('Pas encore d’opérations.');
+  const P = mois.map(m => F.pnl(M, m)), n = mois.length, moy = vals => vals.reduce((s, v) => s + v, 0) / n;
+  const minibars = (vals, coul, fmt = eur) => {
+    const max = Math.max(...vals.map(Math.abs), 1);
+    return `<div class="minibars" aria-hidden="true">${vals.map((v, i) => `<span class="${i === n - 1 ? 'sel' : ''}" title="${D.monthLabel(mois[i], true)} : ${fmt(v)}"
+      style="height:${Math.max(Math.abs(v) / max * 100, 4)}%;--b:${v < 0 ? 'var(--div-neg)' : coul}"></span>`).join('')}</div>`;
+  };
+  const rev = P.map(p => p.revenus), ch = P.map(p => p.charges), res = P.map(p => p.resultat), verse = P.map(p => -p.totaux['Épargne']);
+  const tRev = rev.reduce((s, v) => s + v, 0), taux = tRev > 0 ? res.reduce((s, v) => s + v, 0) / tRev : null;
+  // Groupes de charges : coût net moyen (un remboursement net apparaît en négatif, sans barre)
+  const groupes = F.pnlPlan(M).groupes.find(g => g.section === 'Charges').groupes
+    .map(g => ({ nom: g.nom, v: -moy(P.map(p => g.cats.reduce((s, c) => s + (p.parCat.get(normKey(c)) || 0), 0))) }))
+    .filter(g => Math.abs(g.v) >= 1).sort((a, b) => b.v - a.v);
+  const maxG = Math.max(...groupes.map(g => g.v), 1);
+  const ouvert = state.pnlChargesOuvert !== false;
+  const ligne = (lib, vals, coul, val, sousVal, { cls = '', attrs = '' } = {}) => `
+    <div class="pr-ligne ${cls}" ${attrs}><span class="lib">${lib}</span>${vals ? minibars(vals, coul) : '<span></span>'}
+      <span class="val">${val}${sousVal ? `<small>${sousVal}</small>` : ''}</span></div>`;
+  return `<div class="pnl-resume">
+    ${ligne('Revenus', rev, 'var(--series-1)', eur(moy(rev)), 'par mois')}
+    ${ligne(`<span class="chevron ${ouvert ? 'ouvert' : ''}" aria-hidden="true">▸</span> Charges`, ch, 'var(--series-2)', eur(moy(ch)), 'par mois',
+      { cls: 'clic', attrs: 'id="pr-charges" tabindex="0" role="button" aria-expanded="' + ouvert + '" title="Détailler les charges"' })}
+    ${ouvert ? groupes.map(g => `
+      <div class="pr-ligne sous clic" data-groupe="${esc('Charges|' + g.nom)}" tabindex="0" role="button" title="Voir ce groupe mois par mois">
+        <span class="lib">${esc(g.nom)}</span>
+        ${g.v > 0 ? `<div class="barre" style="width:${g.v / maxG * 100}%;--b:var(--series-2);opacity:${0.45 + 0.55 * g.v / maxG}"></div>` : '<span class="small muted">vient en déduction</span>'}
+        <span class="val ${g.v < 0 ? 'pos' : ''}">${g.v < 0 ? eurSigned(-g.v) : eur(g.v)}</span></div>`).join('') : ''}
+    ${ligne('Capacité d’épargne', res, 'var(--series-1)', `<span class="${moy(res) < 0 ? 'neg' : 'pos'}">${eurSigned(moy(res))}</span>`, `taux ${pct(taux)}`, { cls: 'total' })}
+    ${moy(verse) >= 0
+      ? ligne('Versé sur l’épargne', verse, 'var(--series-3)', eur(moy(verse)), 'par mois, net des retraits')
+      : ligne('Retiré de l’épargne', verse, 'var(--series-3)', eur(-moy(verse)), 'par mois, net des versements')}
+  </div>
+  <p class="small muted">Moyennes sur ${n} mois complets jusqu’à ${D.monthLabel(fin, true)} ; chaque mini-barre est un mois, le mois choisi en plein (survolez pour le montant). Cliquez sur « Charges » pour replier le détail, sur un groupe pour le voir mois par mois.</p>`;
+}
+
 function tablePnl(M, mk, state) {
   const mois = D.range(D.addMonths(mk, -11), mk);
   const P = mois.map(m => F.pnl(M, m));
@@ -1607,7 +1734,11 @@ function pageDepenses(Mtout, state) {
 
       ${UI.card('Des revenus à l’épargne', UI.chart('ch-waterfall', 320), { sub: `${D.monthLabel(mk, true)} · revenus, puis chaque groupe de charges du P&L, jusqu’à ce qui reste`, cls: 'span-12' })}
 
-      ${UI.card('P&L mensuel', tablePnl(M, mk, state), { sub: '12 mois jusqu’au mois sélectionné · cliquez sur un groupe pour le détailler, sur un montant pour voir ses opérations', cls: 'span-12' })}
+      ${state.pnlDetail
+        ? UI.card('P&L mensuel', tablePnl(M, mk, state), { sub: '12 mois jusqu’au mois sélectionné · cliquez sur un groupe pour le détailler, sur un montant pour voir ses opérations', cls: 'span-12',
+          actions: '<button type="button" class="btn small" id="btn-pnl-vue">Revenir au résumé</button>' })
+        : UI.card('P&L', pnlResume(M, mk, state), { sub: 'Moyennes mensuelles sur les 12 derniers mois complets', cls: 'span-12',
+          actions: '<button type="button" class="btn small" id="btn-pnl-vue">Voir le détail mensuel</button>' })}
 
       ${UI.card('Budget par catégorie', `<div class="cats">${lignes || UI.empty('Aucune dépense pour ce mois.')}</div>
         ${lignesAutres ? `<h3 class="cats-titre">Revenus et mouvements hors budget</h3><div class="cats">${lignesAutres}</div>` : ''}
@@ -1697,6 +1828,19 @@ function pageDepenses(Mtout, state) {
     ]);
 
     // P&L : ouvrir / fermer un groupe ; clic sur un montant de catégorie → ses opérations du mois
+    // P&L : bascule résumé / détail ; dans le résumé, « Charges » se replie, un groupe ouvre le détail sur lui
+    document.getElementById('btn-pnl-vue')?.addEventListener('click', () => { state.pnlDetail = !state.pnlDetail; App.render({ garderScroll: true }); });
+    const prCharges = document.getElementById('pr-charges');
+    if (prCharges) {
+      const basculer = () => { state.pnlChargesOuvert = state.pnlChargesOuvert === false; App.render({ garderScroll: true }); };
+      prCharges.addEventListener('click', basculer);
+      prCharges.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); basculer(); } });
+    }
+    document.querySelectorAll('.pr-ligne.sous[data-groupe]').forEach(el => {
+      const ouvrir = () => { (state.pnlOuverts || (state.pnlOuverts = new Set())).add(el.dataset.groupe); state.pnlDetail = true; App.render({ garderScroll: true }); };
+      el.addEventListener('click', ouvrir);
+      el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrir(); } });
+    });
     document.querySelectorAll('.pnl-groupe').forEach(tr => tr.addEventListener('click', () => {
       const ouverts = state.pnlOuverts || (state.pnlOuverts = new Set()), k = tr.dataset.groupe;
       ouverts.has(k) ? ouverts.delete(k) : ouverts.add(k);
@@ -1878,7 +2022,7 @@ function tableRendements(M, ids) {
     <p class="small muted">Rendement de chaque mois hors versements ; l’année chaîne les mois (performance « time-weighted »). Survolez une case pour le gain en euros.</p>`;
 }
 
-function cartesPositions(M, compte, today) {
+function cartesPositions(M, compte, today, state, ouvert = false) {
   const cm = F.moisCourant();
   const lignes = F.positionsAt(M, compte.id, today).filter(p => p.quantite > 0);
   if (!lignes.length) return '';
@@ -1928,17 +2072,17 @@ function cartesPositions(M, compte, today) {
   }).join('')}</tr>`).join('');
 
   return `
-    ${UI.card(`Lignes — ${esc(compte.nom)}`, `<div class="table-wrap"><table>
+    ${UI.repli(`lignes-${compte.id}`, `Lignes — ${esc(compte.nom)}`, `<div class="table-wrap"><table>
       <thead><tr><th>Ligne</th>${avecOps ? '<th>1er achat</th>' : ''}<th class="num">Qté</th><th class="num">PRU</th><th class="num">Cours</th><th class="num">Valorisation</th><th class="num">+/- value</th><th class="num">vs PRU</th>${avecOps ? '<th class="num">Dividendes</th>' : ''}<th class="num">Poids</th><th class="num">1 mois</th><th class="num">Depuis 1er janv.</th><th class="num">12 mois</th></tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr><td colspan="${avecOps ? 5 : 4}">Total titres</td><td class="num">${eur(total)}</td><td class="num">${UI.delta(pvTotal)}</td><td class="num">${coutTotal ? pctSigned(pvTotal / coutTotal) : '—'}</td>${avecOps ? `<td class="num">${eur(divTotal)}</td>` : ''}<td colspan="4"></td></tr></tfoot>
       </table></div>
       <p class="small muted">« +/- value » : valorisation moins prix de revient (PRU × quantité). « vs PRU » : cours actuel comparé à votre prix de revient unitaire. Les colonnes 1 mois / 1er janv. / 12 mois comparent les cours (hors dividendes), quelle que soit la date d’achat.
       ${avecOps ? 'Cliquez sur une ligne pour voir ses achats, ventes et dividendes.' : 'Dates d’achat non disponibles pour ce contrat : les versements sont répartis automatiquement entre les fonds.'}</p>`,
-      { sub: `relevé du ${D.fmt(lignes[0].date)}`, cls: 'span-12' })}
-    ${UI.card(`Variation mensuelle des cours — ${esc(compte.nom)}`, `<div class="table-wrap"><table class="heat-table">
+      { sub: `${lignes.length} ligne${lignes.length > 1 ? 's' : ''} · ${eur(total)} · relevé du ${D.fmt(lignes[0].date)}`, state, ouvert })}
+    ${UI.repli(`cours-${compte.id}`, `Variation mensuelle des cours — ${esc(compte.nom)}`, `<div class="table-wrap"><table class="heat-table">
       <thead><tr><th>Ligne</th>${mois.map(m => `<th class="num">${D.monthLabel(m)}</th>`).join('')}</tr></thead>
-      <tbody>${heat}</tbody></table></div>`, { sub: '12 derniers mois', cls: 'span-12' })}`;
+      <tbody>${heat}</tbody></table></div>`, { sub: '12 derniers mois', state })}`;
 }
 
 function pageEpargne(M, state) {
@@ -1960,8 +2104,12 @@ function pageEpargne(M, state) {
   // Un seul compte dans l'onglet : vue détaillée de ce compte (lignes, répartition par ligne)
   const choix = comptesVue.length === 1 ? comptesVue[0] : null;
   const ids = comptesVue.map(c => c.id);
+  // Une couleur par type de support, la même partout (onglets, cartes, anneau, courbe)
+  const COULEUR = { pea: 3, 'assurance-vie': 6, livret: 1, per: 4, 'fonds-monetaire': 5, cto: 7, pel: 2, crypto: 8 };
+  const varCouleur = type => `var(--series-${COULEUR[type] || 7})`;
+  const couleur = type => Charts.colors().series[(COULEUR[type] || 7) - 1];
   const onglets = groupes.length > 1 ? `<nav class="onglets" aria-label="Supports">
-    ${[{ type: '', label: 'Tous les comptes', comptes }, ...groupes].map(g => `<button type="button" class="onglet" data-groupe="${esc(g.type)}" aria-pressed="${(groupe?.type || '') === g.type}" title="${esc(g.comptes.map(c => c.nom).join(', '))}">${esc(g.label)}</button>`).join('')}
+    ${[{ type: '', label: 'Tous les comptes', comptes }, ...groupes].map(g => `<button type="button" class="onglet" data-groupe="${esc(g.type)}" aria-pressed="${(groupe?.type || '') === g.type}" ${g.type ? `style="--c:${varCouleur(g.type)}"` : ''} title="${esc(g.comptes.map(c => c.nom).join(', '))}">${esc(g.label)}</button>`).join('')}
   </nav>` : '';
 
   const total = ids.reduce((s, id) => s + F.valeur(M, id, today), 0);
@@ -1994,53 +2142,93 @@ function pageEpargne(M, state) {
     </tr>`;
   }).join('');
 
-  // Répartition : par ligne pour un compte détaillé, par compte dans un onglet de support, par type sinon
-  const parType = new Map();
+  // Répartition (anneau) : par ligne pour un compte détaillé, par compte dans un onglet de support, par
+  // support sur « Tous les comptes » ; un compte sans lignes montre ses versements et ses gains.
   const lignesSel = choix ? F.positionsAt(M, choix.id, today).filter(p => p.quantite > 0) : [];
-  if (lignesSel.length) lignesSel.forEach(p => parType.set(p.titre, p.quantite * p.cours));
-  else if (groupe) ouverts.forEach(c => parType.set(c.nom, F.valeur(M, c.id, today)));
-  else comptes.forEach(c => { const l = typeInfo(c.type).label; parType.set(l, (parType.get(l) || 0) + F.valeur(M, c.id, today)); });
-  const totalAlloc = [...parType.values()].reduce((s, v) => s + v, 0);
-  const alloc = [...parType].sort((a, b) => b[1] - a[1]).map(([l, v]) => `
-    <div class="alloc-row"><div class="row-between"><span>${esc(l)}</span><span><strong>${eur(v)}</strong> <span class="muted">${pct(totalAlloc ? v / totalAlloc : null)}</span></span></div>
-    <div class="track"><div class="fill" style="width:${totalAlloc ? v / totalAlloc * 100 : 0}%"></div></div></div>`).join('');
+  const palette = Charts.colors().series;
+  let parts, sousRepart;
+  if (lignesSel.length) {
+    parts = lignesSel.map((p, i) => ({ label: p.titre, v: p.quantite * p.cours })).sort((a, b) => b.v - a.v).map((p, i) => ({ ...p, c: palette[(i + (COULEUR[choix.type] || 7) - 1) % 8] }));
+    sousRepart = 'par ligne';
+  } else if (choix) {
+    parts = pv != null && pv > 0 ? [{ label: 'Versé', v: vers, c: couleur(choix.type) }, { label: 'Gains', v: pv, c: palette[0] === couleur(choix.type) ? palette[2] : palette[0] }] : [{ label: choix.nom, v: total, c: couleur(choix.type) }];
+    sousRepart = pv != null && pv > 0 ? 'versements et gains' : '';
+  } else if (groupe) {
+    parts = ouverts.map((c, i) => ({ label: c.nom, v: F.valeur(M, c.id, today), c: palette[(i + (COULEUR[groupe.type] || 7) - 1) % 8] }));
+    sousRepart = 'par compte';
+  } else {
+    parts = groupes.map(g => ({ label: g.label, v: g.comptes.reduce((s, c) => s + F.valeur(M, c.id, today), 0), c: couleur(g.type) }));
+    sousRepart = 'par support';
+  }
+  parts = parts.filter(p => p.v > 0.5);
+  // Au-delà de 7 parts, les plus petites sont regroupées
+  if (parts.length > 7) parts = [...parts.slice(0, 6), { label: `${parts.length - 6} autres`, v: parts.slice(6).reduce((s, p) => s + p.v, 0), c: Charts.colors().muted }];
+  const totalParts = parts.reduce((s, p) => s + p.v, 0);
+  const legende = parts.map(p => `<li><span class="pastille" style="background:${p.c}"></span>${esc(p.label)}<span class="val">${eur(p.v)} · ${pct(totalParts ? p.v / totalParts : null)}</span></li>`).join('');
 
+  // Cartes par support (vue « Tous les comptes ») : un clic ouvre l'onglet du support
+  const supports = groupe ? '' : `<section class="supports span-12">${groupes.map(g => {
+    const gi = g.comptes.map(c => c.id), v = gi.reduce((s, id) => s + F.valeur(M, id, today), 0), t = triOk(F.tri(M, gi, null, today));
+    const p = F.perf(M, gi, d12, today);
+    return `<button type="button" class="support" data-groupe="${esc(g.type)}" style="--c:${varCouleur(g.type)}">
+      <span class="nom">${esc(g.label)}</span><span class="montant">${eur(v)}</span>
+      <span class="detail">${t ? `TRI ${pctSigned(t.taux)}` : 'TRI —'}${p.pct != null ? ` · 12 mois ${pctSigned(p.pct)}` : ''}</span></button>`;
+  }).join('')}</section>`;
+
+  const coulVue = choix ? varCouleur(choix.type) : groupe ? varCouleur(groupe.type) : 'var(--accent)';
   const html = `
     <div class="page-h"><h1>Épargne & placements</h1><p class="muted">${choix ? `${esc(choix.nom)}${choix.banque ? ` · ${esc(choix.banque)}` : ''}` : `${esc(groupe ? groupe.label : 'Tous les comptes')} · ${ouverts.length} compte${ouverts.length > 1 ? 's' : ''} ouvert${ouverts.length > 1 ? 's' : ''}`} · situation au ${D.fmt(today)}</p></div>
     ${onglets}
     <div class="grid">
+      <section class="card epargne-hero span-12" style="--hero-tint: color-mix(in srgb, ${coulVue} 22%, transparent)">
+        <div>
+          <div class="kpi-label">${choix ? 'Valorisation' : 'Encours total'}</div>
+          <div class="hero-value">${eur(total)}</div>
+          <div class="hero-deltas">
+            <div>${pv == null ? '<span class="muted">Versements non renseignés</span>' : `${UI.delta(pv)} <span class="muted">de plus-values sur ${eur(vers)} versés (${pctSigned(vers ? pv / vers : null)})</span>`}</div>
+            <div>${p12.pct == null ? '<span class="muted">Historique de moins de 12 mois</span>' : `<strong>${pctSigned(p12.pct)}</strong> <span class="muted">sur 12 mois</span>`}${tri ? ` · <strong>${pctSigned(tri.taux)}</strong> <span class="muted">par an depuis le ${D.fmt(tri.debut)} (TRI)</span>` : ''}</div>
+          </div>
+          ${UI.chart('ch-valeur', 230)}
+          <p class="small muted">${idsV.length ? `Valeur (trait plein) et versements cumulés (pointillés) : l’écart correspond aux gains${horsV ? ', sur les comptes dont les versements sont connus' : ''}.` : 'Évolution de la valeur.'}</p>
+        </div>
+        <div class="donut-wrap">
+          ${UI.chart('ch-repartition', 200)}
+          ${sousRepart ? `<div class="small muted">Répartition ${sousRepart}</div>` : ''}
+          <ul class="legende">${legende}</ul>
+        </div>
+      </section>
+
+      ${supports}
+
       <section class="card span-12"><div class="kpis four">
-        ${UI.kpi(choix ? 'Valorisation' : 'Encours total', eur(total), choix ? esc(typeInfo(choix.type).label) : groupe ? esc(ouverts.map(c => c.nom).join(', ')) : `dont ${eur(comptes.filter(c => F.classe(c) === 'placements').reduce((s, c) => s + F.valeur(M, c.id, today), 0))} en placements`)}
         ${UI.kpi('Plus-values latentes', pv == null ? '—' : UI.delta(pv), pv == null ? 'versements non renseignés' : `sur ${eur(vers)} versés · ${pctSigned(vers ? pv / vers : null)}${horsV ? ` · hors ${horsV} compte${horsV > 1 ? 's' : ''} sans versements` : ''}`)}
         ${UI.kpi('Performance 12 mois', pctSigned(p12.pct), p12.pct == null ? 'historique insuffisant' : `${UI.delta(p12.gain)} · ${eur(p12.flux)} versés`)}
         ${UI.kpi('Depuis le 1er janvier', pctSigned(pYtd.pct), pYtd.pct == null ? 'historique insuffisant' : `${UI.delta(pYtd.gain)} · ${eur(pYtd.flux)} versés`)}
         ${UI.kpi('TRI annualisé', tri ? pctSigned(tri.taux) : '—', tri ? `depuis le ${D.fmt(tri.debut)}${tri12 ? ` · ${pctSigned(tri12.taux)} sur 12 mois` : ''}` : 'versements non renseignés ou historique insuffisant')}
       </div></section>
 
-      ${choix ? cartesPositions(M, choix, today) : ''}
+      ${UI.card('Gains mensuels', UI.chart('ch-gains', 240), { sub: 'Variation de valeur hors versements, 12 derniers mois', cls: choix ? 'span-12' : 'span-6' })}
+      ${choix ? '' : UI.card('Encours par compte', UI.chart('ch-comptes', 240), { sub: '24 derniers mois', cls: 'span-6' })}
 
-      ${UI.card(idsV.length ? 'Valeur vs versements cumulés' : 'Évolution de la valeur', UI.chart('ch-valeur', 300), { sub: idsV.length ? `L’écart entre les deux courbes correspond aux gains accumulés${horsV ? ' (comptes avec versements renseignés)' : ''}` : 'Versements non renseignés', cls: 'span-8' })}
-      ${UI.card('Répartition', `<div class="alloc">${alloc}</div>`, { sub: lignesSel.length ? 'par ligne' : 'par type de support', cls: 'span-4' })}
+      ${comptesVue.map(c => cartesPositions(M, c, today, state, !!choix)).join('')}
 
-      ${UI.card('Performance mensuelle et annuelle', tableRendements(M, ids), { sub: choix ? esc(choix.nom) : groupe ? esc(groupe.label) : 'Ensemble de l’épargne et des placements', cls: 'span-12' })}
+      ${UI.repli('rendements', 'Performance mensuelle et annuelle', tableRendements(M, ids), { sub: choix ? esc(choix.nom) : groupe ? esc(groupe.label) : 'Ensemble de l’épargne et des placements', state })}
 
-      ${choix ? '' : comptesVue.map(c => cartesPositions(M, c, today)).join('')}
-
-      ${UI.card('Détail par compte', `<div class="table-wrap"><table>
+      ${UI.repli('detail-comptes', 'Détail par compte', `<div class="table-wrap"><table>
         <thead><tr><th>Compte</th><th>Type</th><th class="num">Valeur</th><th class="num">Versé</th><th class="num">Plus-value</th><th class="num">Perf. totale</th><th class="num">Perf. 12 mois</th><th class="num">TRI annuel</th><th class="num">Poids</th></tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr><td colspan="2">Total</td><td class="num">${eur(total)}</td><td class="num">${idsV.length ? eur(vers) : '—'}</td><td class="num">${pv == null ? '—' : UI.delta(pv)}</td><td class="num">${pv != null && vers ? pctSigned(pv / vers) : '—'}</td><td class="num">${pctSigned(p12.pct)}</td><td class="num">${triCell(tri)}</td><td></td></tr></tfoot>
         </table></div>
-        <p class="small muted">Performance 12 mois calculée hors versements (méthode de Dietz simplifiée). TRI : taux de rendement interne annualisé depuis le premier relevé du compte, qui tient compte de la date de chaque versement et retrait (relevés mensuels). « — » : versements non renseignés dans soldes.csv ou moins de 3 mois d’historique. PEA : versements estimés à partir du prix de revient ; fonds monétaire Revolut : historique reconstitué.</p>`, { cls: 'span-12' })}
-
-      ${UI.card('Gains mensuels', UI.chart('ch-gains', 240), { sub: 'Variation de valeur hors versements, 12 derniers mois', cls: choix ? 'span-12' : 'span-6' })}
-      ${choix ? '' : UI.card('Encours par compte', UI.chart('ch-comptes', 240), { sub: '24 derniers mois', cls: 'span-6' })}
+        <p class="small muted">Performance 12 mois calculée hors versements (méthode de Dietz simplifiée). TRI : taux de rendement interne annualisé depuis le premier relevé du compte, qui tient compte de la date de chaque versement et retrait (relevés mensuels). « — » : versements non renseignés dans soldes.csv ou moins de 3 mois d’historique. PEA : versements estimés à partir du prix de revient ; fonds monétaire Revolut : historique reconstitué.</p>`,
+        { sub: `${comptesVue.length} compte${comptesVue.length > 1 ? 's' : ''} · versé, plus-value, performance, TRI, poids`, state })}
     </div>`;
 
   return { html, after() {
-    document.querySelectorAll('.onglet[data-groupe]').forEach(b => b.addEventListener('click', () => {
-      state.groupeEpargne = b.dataset.groupe; App.render({ garderScroll: true });
+    document.querySelectorAll('.onglet[data-groupe], .support[data-groupe]').forEach(b => b.addEventListener('click', () => {
+      state.groupeEpargne = b.dataset.groupe; App.render({ garderScroll: b.classList.contains('onglet') });
     }));
+    UI.suivreReplis(state);
+    if (parts.length) Charts.donut(document.getElementById('ch-repartition'), parts.map(p => p.label), parts.map(p => p.v), parts.map(p => p.c));
     // Clic (ou Entrée) sur une ligne : affiche / masque ses opérations
     document.querySelectorAll('tr.ligne-clic').forEach(tr => {
       const basculer = () => { const d = document.getElementById(tr.dataset.detail); d.hidden = !d.hidden; tr.classList.toggle('ouvert', !d.hidden); };
@@ -2055,7 +2243,7 @@ function pageEpargne(M, state) {
     const cv = document.getElementById('ch-valeur');
     if (mC.length < 2) cv.parentElement.innerHTML = UI.empty('La courbe apparaîtra à partir du deuxième relevé mensuel.');
     else Charts.line(cv, mC.map(m => D.monthLabel(m)), [
-      { label: 'Valeur', data: mC.map(m => idsC.reduce((s, id) => s + F.valeur(M, id, F.dateFin(m)), 0)) },
+      { label: 'Valeur', data: mC.map(m => idsC.reduce((s, id) => s + F.valeur(M, id, F.dateFin(m)), 0)), color: choix ? couleur(choix.type) : groupe ? couleur(groupe.type) : Charts.colors().series[0] },
       ...(idsV.length ? [{ label: 'Versements cumulés', data: mC.map(m => idsV.reduce((s, id) => s + F.versements(M, id, F.dateFin(m)), 0)), color: Charts.colors().text2, dash: [5, 4] }] : []),
     ]);
     const m12 = D.range(D.addMonths(cm, -11), cm);
