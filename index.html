@@ -174,6 +174,12 @@ tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
 .pastille { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; background: var(--c); vertical-align: middle; }
 .jauge-budget { margin: 6px 0 12px; max-width: 520px; }
 .hero-kpis { margin: 14px 0 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Investissement locatif */
+.locatif-kpis { margin: 0; grid-template-columns: 1fr; align-self: stretch; }
+#lr-alerte .status { white-space: normal; }
+.champ-unite { display: flex; align-items: center; gap: 8px; }
+.champ-unite input { flex: 1; min-width: 0; }
+.champ-unite span { color: var(--text-2); font-size: 13px; min-width: 22px; }
 .ops-wrap { max-height: 560px; overflow-y: auto; }
 @media (max-width: 760px) {
   .epargne-hero { grid-template-columns: 1fr; }
@@ -396,7 +402,10 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V8.5L11 4v17zM13 21V9h7v12zM6.5 10h2v2h-2zm0 4h2v2h-2zm9-2h2v2h-2zm0 4h2v2h-2z"/></svg>
         <span>Immobilier</span>
       </a>
-      <a href="#parametres" data-route="parametres">
+      <a href="#locatif" data-route="locatif">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 7a4.5 4.5 0 1 1 3.6 4.4L10 13.5H8v2H6v2H3v-3l5.6-5.6A4.5 4.5 0 0 1 8.5 7zm4.5-1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM13 15h8v6h-8z"/></svg>
+        <span>Locatif</span>
+      </a>      <a href="#parametres" data-route="parametres">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 20 6v5.5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z"/></svg>
         <span>Paramètres</span>
       </a>
@@ -2508,6 +2517,169 @@ function pageRecommandations(M, state) {
   <script>
 'use strict';
 
+/* ---------- Investissement locatif : capacité d'emprunt résiduelle ----------
+   Règles du Haut Conseil de stabilité financière (HCSF) appliquées par les banques : mensualités de tous les crédits,
+   assurance comprise, au plus 35 % des revenus nets avant impôt ; durée au plus 25 ans. Les loyers attendus sont
+   retenus à 70 % (vacance, charges), comme le font la plupart des banques. Le crédit en cours (mensualité et
+   assurance des deux emprunteurs) vient d'immobilier.json. Les hypothèses saisies (dont le salaire d'Élodie) restent
+   dans ce navigateur : elles ne sont ni dans la page publiée ni dans le dépôt. */
+
+const LOCATIF_KEY = 'suivi-comptes.locatif';
+const HCSF = { endettement: 0.35, loyerRetenu: 0.7 };
+
+// Mensualité (assurance comprise) d'un prêt de 1 € : taux et assurance annuels en %, durée en années
+function coefMensuel(taux, ans, assurance) {
+  const r = taux / 100 / 12, n = ans * 12;
+  return (r > 0 ? r / (1 - Math.pow(1 + r, -n)) : 1 / n) + assurance / 100 / 12;
+}
+
+// Valeurs proposées par défaut, tirées des données : salaire habituel et primes des 12 derniers mois, crédit en cours
+function hypothesesParDefaut(M) {
+  const cm = F.moisCourant(), debut = D.addMonths(cm, -12) + '-01';
+  const sal = M.transactions.filter(t => t.date >= debut && t.date < cm + '-01' && t.montant > 0 && normKey(t.categorie) === normKey('Salaire')).map(t => t.montant);
+  const med = sal.length ? [...sal].sort((a, b) => a - b)[Math.floor(sal.length / 2)] : 0;
+  const primes = Math.max(0, sal.reduce((s, v) => s + v, 0) - med * sal.length);
+  return { salMoi: Math.round(med), primes: Math.round(primes / 100) * 100, partPrimes: 50, salElodie: '', autres: 0,
+    loyer: 900, chargesLoc: 150, taux: 3.65, duree: 25, assurance: 0.30, apport: 20000, notaire: 8 };
+}
+
+// Crédit en cours : mensualité et assurance de l'échéance du mois (les deux emprunteurs), plus les autres crédits connus
+function creditsEnCours(M) {
+  const today = D.today();
+  return (M.immobilier || []).filter(b => b.pret && b.echeancier?.length).map(b => {
+    const e = b.echeancier.find(x => x.date >= today) || b.echeancier[b.echeancier.length - 1];
+    return { nom: b.pret.nom || b.nom, mensualite: parseNum(b.pret.mensualite) || 0, assurance: e.assurance || 0, fin: b.echeancier[b.echeancier.length - 1].date };
+  });
+}
+
+function pageLocatif(M, state) {
+  let saisies = {};
+  try { saisies = JSON.parse(store.get(localStorage, LOCATIF_KEY) || '{}'); } catch { saisies = {}; }
+  const h = { ...hypothesesParDefaut(M), ...saisies };
+  const credits = creditsEnCours(M), chargesActuelles = credits.reduce((s, c) => s + c.mensualite + c.assurance, 0);
+  const champ = (id, label, aide, { pas = 1, unite = '€' } = {}) => `
+    <label>${label}<span class="champ-unite"><input type="number" inputmode="decimal" min="0" step="${pas}" id="lp-${id}" value="${esc(h[id])}"><span>${unite}</span></span>${aide ? `<span class="muted small">${aide}</span>` : ''}</label>`;
+
+  const html = `
+    <div class="page-h"><h1>Investissement locatif</h1><p class="muted">Capacité d’emprunt résiduelle du foyer, crédit actuel compris</p></div>
+    <div class="grid">
+      <section class="card epargne-hero span-12" style="--hero-tint: color-mix(in srgb, var(--series-4) 22%, transparent)">
+        <div>
+          <div class="kpi-label">Capacité d’emprunt résiduelle</div>
+          <div class="hero-value" id="lr-capacite">—</div>
+          <div class="hero-deltas">
+            <div><span class="muted">Mensualité possible, assurance comprise :</span> <strong id="lr-mensualite">—</strong></div>
+            <div><span class="muted">Prix de bien atteignable (apport compris, hors frais de notaire) :</span> <strong id="lr-prix">—</strong></div>
+            <div id="lr-alerte" class="small"></div>
+          </div>
+          <div class="jauge-budget">
+            <div class="track big"><div class="fill" id="lr-jauge-actuel"></div><div class="pace" id="lr-jauge-max" title="Plafond HCSF : 35 %"></div></div>
+            <div class="row-between small muted"><span id="lr-taux-actuel">—</span><span>plafond 35 %</span></div>
+          </div>
+        </div>
+        <div class="kpis hero-kpis locatif-kpis">
+          ${UI.kpi('Revenus retenus', '<span id="lr-revenus">—</span>', 'par mois, nets avant impôt')}
+          ${UI.kpi('Crédits en cours', eur(chargesActuelles), `${credits.map(c => `${esc(c.nom)}, fin ${D.fmt(c.fin)}`).join(' · ') || 'aucun'}`)}
+          ${UI.kpi('Rendement brut', '<span id="lr-rendement">—</span>', 'loyers annuels / prix du bien')}
+          ${UI.kpi('Cash-flow mensuel', '<span id="lr-cashflow">—</span>', 'loyer − mensualité − charges, avant impôt')}
+        </div>
+      </section>
+
+      ${UI.card('Vos hypothèses', `<form class="form" id="form-locatif" onsubmit="return false">
+        <div class="form-row">
+          ${champ('salMoi', 'Votre salaire net mensuel', 'D’après vos virements KPMG, après prélèvement à la source : la banque retient le net avant impôt, ajoutez-le.')}
+          ${champ('salElodie', 'Salaire net mensuel d’Élodie', 'Net avant impôt, sur 12 mois.')}
+        </div>
+        <div class="form-row">
+          ${champ('primes', 'Primes annuelles', 'Variable des 12 derniers mois, d’après vos virements.')}
+          ${champ('partPrimes', 'Part des primes retenue', 'Les banques n’en comptent souvent qu’une partie, si elles sont régulières.', { unite: '%' })}
+        </div>
+        <div class="form-row">
+          ${champ('autres', 'Autres revenus mensuels', 'Revenus locatifs existants, etc.')}
+          ${champ('loyer', 'Loyer attendu du bien', 'Hors charges ; retenu à 70 % dans les revenus.')}
+        </div>
+        <div class="form-row">
+          ${champ('taux', 'Taux du crédit', 'Environ 3,5 à 3,75 % sur 25 ans en octobre 2026.', { pas: 0.05, unite: '%' })}
+          ${champ('duree', 'Durée', '25 ans au plus (règle HCSF).', { unite: 'ans' })}
+        </div>
+        <div class="form-row">
+          ${champ('assurance', 'Assurance emprunteur', 'Taux annuel sur le capital, les deux emprunteurs.', { pas: 0.01, unite: '%' })}
+          ${champ('apport', 'Apport', 'Couvre au moins les frais de notaire en général.')}
+        </div>
+        <div class="form-row">
+          ${champ('notaire', 'Frais de notaire', 'Environ 7 à 8 % dans l’ancien, 2 à 3 % dans le neuf.', { pas: 0.5, unite: '%' })}
+          ${champ('chargesLoc', 'Charges du bien par mois', 'Taxe foncière, copropriété, assurance, gestion.')}
+        </div>
+        <div class="row-between"><span class="small muted">Vos saisies restent dans ce navigateur.</span><button type="button" class="btn small ghost" id="lp-reset">Valeurs par défaut</button></div>
+      </form>`, { sub: 'Modifiez les chiffres : le calcul se met à jour', cls: 'span-7' })}
+
+      ${UI.card('Le calcul', `<div class="table-wrap"><table><tbody id="lr-detail"></tbody></table></div>
+        <p class="small muted">Règle HCSF : toutes les mensualités (assurance comprise) au plus 35 % des revenus nets avant impôt. Certaines banques calculent autrement pour un investissement locatif (différentiel loyer − mensualité) et regardent aussi le reste à vivre.</p>`, { sub: 'Revenus, crédits en cours, plafond de 35 %', cls: 'span-5' })}
+
+      ${UI.card('Selon le taux et la durée', `<div class="table-wrap"><table id="lr-sensibilite"></table></div>`, { sub: 'Capacité d’emprunt, mêmes revenus et même assurance', cls: 'span-12' })}
+    </div>
+    <p class="small muted">Simulation indicative : chaque banque applique ses propres critères (stabilité des revenus, apport, reste à vivre). Je ne suis pas conseiller financier agréé ; un courtier vous donnera une capacité ferme.</p>`;
+
+  return { html, after() {
+    const ids = Object.keys(hypothesesParDefaut(M));
+    const lire = () => Object.fromEntries(ids.map(id => [id, parseNum(document.getElementById('lp-' + id).value) ?? 0]));
+    const calculer = () => {
+      const v = lire();
+      const revenus = v.salMoi + v.salElodie + v.autres + v.primes / 12 * v.partPrimes / 100;
+      const loyerRetenu = v.loyer * HCSF.loyerRetenu;
+      const plafond = HCSF.endettement * (revenus + loyerRetenu);
+      const mensualite = Math.max(0, plafond - chargesActuelles);
+      const coef = coefMensuel(v.taux, v.duree, v.assurance);
+      const capacite = mensualite / coef;
+      const prix = (capacite + v.apport) / (1 + v.notaire / 100);
+      const tauxActuel = revenus > 0 ? chargesActuelles / revenus : null;
+      const set = (id, txt) => { document.getElementById(id).innerHTML = txt; };
+      set('lr-capacite', eur(Math.round(capacite / 1000) * 1000));
+      set('lr-mensualite', eur(mensualite));
+      set('lr-prix', mensualite > 0 ? eur(Math.round(prix / 1000) * 1000) : '—');
+      set('lr-revenus', eur(revenus));
+      set('lr-taux-actuel', `Endettement actuel : ${pct(tauxActuel)} des revenus`);
+      document.getElementById('lr-jauge-actuel').style.width = `${Math.min(1, (tauxActuel || 0) / 0.5) * 100}%`;
+      document.getElementById('lr-jauge-actuel').classList.toggle('over', (tauxActuel || 0) > HCSF.endettement);
+      document.getElementById('lr-jauge-max').style.left = `${HCSF.endettement / 0.5 * 100}%`;
+      set('lr-alerte', !v.salElodie ? '<span class="status warning">● Renseignez le salaire d’Élodie : le crédit actuel est commun, ses revenus comptent.</span>'
+        : mensualite <= 0 ? '<span class="status critical">▲ Le crédit actuel atteint déjà le plafond de 35 %.</span>' : '');
+      set('lr-rendement', mensualite > 0 && v.loyer ? pct(v.loyer * 12 / prix) : '—');
+      const cash = v.loyer - mensualite - v.chargesLoc;
+      set('lr-cashflow', v.loyer && mensualite > 0 ? `<span class="${cash < 0 ? 'neg' : 'pos'}">${eurSigned(cash)}</span>` : '—');
+      const lignes = [
+        ['Salaires nets (vous + Élodie)', eur(v.salMoi + v.salElodie)],
+        [`Primes retenues (${v.partPrimes} % de ${eur(v.primes)} par an)`, eur(v.primes / 12 * v.partPrimes / 100)],
+        ['Autres revenus', eur(v.autres)],
+        [`Loyer attendu retenu à 70 % (${eur(v.loyer)})`, eur(loyerRetenu)],
+        ['<strong>Revenus retenus</strong>', `<strong>${eur(revenus + loyerRetenu)}</strong>`],
+        ['Plafond de mensualités (35 %)', eur(plafond)],
+        ...credits.map(c => [`− ${esc(c.nom)} (mensualité + assurance)`, eur(c.mensualite + c.assurance)]),
+        ['<strong>Mensualité possible pour le nouveau crédit</strong>', `<strong>${eur(mensualite)}</strong>`],
+        [`Capacité sur ${v.duree} ans à ${nbFr(v.taux)} % + assurance ${nbFr(v.assurance)} %`, `<strong>${eur(capacite)}</strong>`],
+        [`+ apport ${eur(v.apport)}, − frais de notaire ${nbFr(v.notaire)} %`, `prix ${eur(prix)}`],
+      ];
+      set('lr-detail', lignes.map(([a, b]) => `<tr><td>${a}</td><td class="num nowrap">${b}</td></tr>`).join(''));
+      const taux = [3.25, 3.5, 3.75, 4], durees = [15, 20, 25];
+      set('lr-sensibilite', `<thead><tr><th>Durée</th>${taux.map(t => `<th class="num">${nbFr(t)} %</th>`).join('')}</tr></thead><tbody>${durees.map(d => `<tr><th scope="row">${d} ans</th>${taux.map(t => `<td class="num ${t === v.taux && d === v.duree ? 'strong-cell' : ''}">${eur(Math.round(mensualite / coefMensuel(t, d, v.assurance) / 1000) * 1000)}</td>`).join('')}</tr>`).join('')}</tbody>`);
+    };
+    const nbFr = x => x.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+    document.getElementById('form-locatif').addEventListener('input', () => {
+      store.set(localStorage, LOCATIF_KEY, JSON.stringify(Object.fromEntries(ids.map(id => [id, document.getElementById('lp-' + id).value]))));
+      calculer();
+    });
+    document.getElementById('lp-reset').addEventListener('click', () => {
+      if (!confirm('Revenir aux valeurs par défaut ? Le salaire d’Élodie saisi sera effacé.')) return;
+      store.set(localStorage, LOCATIF_KEY, null); App.render({ garderScroll: true });
+    });
+    calculer();
+  } };
+}
+
+</script>
+  <script>
+'use strict';
+
 const CFG_KEY = 'suivi-comptes.cfg';
 const THEME_KEY = 'suivi-comptes.theme';
 const store = {
@@ -2515,7 +2687,7 @@ const store = {
   set(s, k, v) { try { v == null ? s.removeItem(k) : s.setItem(k, v); } catch { /* stockage indisponible */ } },
 };
 
-const PAGES = { overview: pageOverview, recommandations: pageRecommandations, depenses: pageDepenses, epargne: pageEpargne, immobilier: pageImmobilier, parametres: pageParametres };
+const PAGES = { overview: pageOverview, recommandations: pageRecommandations, depenses: pageDepenses, epargne: pageEpargne, immobilier: pageImmobilier, locatif: pageLocatif, parametres: pageParametres };
 
 const App = {
   M: null,
