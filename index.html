@@ -1371,15 +1371,17 @@ function abonnements(M) {
   const plus = (date, n) => { const mk = D.addMonths(D.monthKey(date), n); return `${mk}-${String(Math.min(Number(date.slice(8, 10)), D.daysInMonth(mk))).padStart(2, '0')}`; };
   return (M.budget.abonnements || []).map(a => {
     let re; try { re = new RegExp(a.motif || a.nom, 'i'); } catch { re = /$^/; }
-    const ops = M.transactions.filter(t => t.montant < 0 && re.test(t.libelle)).sort((x, y) => x.date.localeCompare(y.date));
+    // "compte" (facultatif) : distingue deux abonnements du même prestataire prélevés sur des comptes différents
+    const ops = M.transactions.filter(t => t.montant < 0 && re.test(t.libelle) && (!a.compte || a.compte === t.compte)).sort((x, y) => x.date.localeCompare(y.date));
     const mois = FREQUENCES[a.frequence] || 1, der = ops[ops.length - 1];
     if (!der) return { ...a, mois, aucun: true };
     let prochaine = plus(der.date, mois);
     const actif = D.diffDays(prochaine, finDonnees.get(der.compte)) <= 15;
     // Échéances passées depuis la fin de l'export : on affiche la prochaine à venir
     for (let k = 2; actif && prochaine < today; k++) prochaine = plus(der.date, mois * k);
-    const part = parts.get(der.compte) ?? 1, montant = -der.montant;
-    return { ...a, mois, montant, part, parMois: montant * part / mois, dernier: der.date, prochaine, actif,
+    // "montant" (facultatif) : nouveau tarif annoncé, pris en compte avant d'apparaître dans les prélèvements
+    const part = parts.get(der.compte) ?? 1, preleve = -der.montant, montant = parseNum(a.montant) ?? preleve;
+    return { ...a, mois, montant, preleve, part, parMois: montant * part / mois, dernier: der.date, prochaine, actif,
       compte: nomCompte.get(der.compte) || der.compte, jour: Number(der.date.slice(8, 10)) };
   }).sort((x, y) => (y.actif === true) - (x.actif === true) || (x.prochaine || '9').localeCompare(y.prochaine || '9'));
 }
@@ -1396,7 +1398,7 @@ function carteAbonnements(M) {
       : `${D.fmt(a.prochaine)}<div class="muted small">${dans <= 0 ? 'attendu' : dans === 1 ? 'demain' : `dans ${dans} j`}</div>`;
     return `<tr class="${a.actif ? '' : 'abo-inactif'}">
       <td><strong>${esc(a.nom)}</strong><div class="muted small">${libFreq[a.mois] || ''} · le ${a.jour} · ${esc(a.compte)}${a.part < 1 ? ` · votre part ${pct(a.part)}` : ''}</div></td>
-      <td class="num nowrap">${eur(a.montant, true)}${a.mois > 1 ? `<div class="muted small">${eur(a.montant / a.mois, true)}/mois</div>` : ''}</td>
+      <td class="num nowrap">${eur(a.montant, true)}${a.mois > 1 ? `<div class="muted small">${eur(a.montant / a.mois, true)}/mois</div>` : ''}${Math.abs(a.montant - a.preleve) >= 0.01 ? `<div class="muted small" title="Nouveau tarif annoncé, pas encore prélevé">nouveau tarif · dernier prélevé ${eur(a.preleve, true)}</div>` : ''}</td>
       <td class="num nowrap">${quand}</td></tr>`;
   }).join('');
   return `<div class="abo-total"><span class="kpi-value">${eur(total)}</span> <span class="muted">par mois à votre part · ${actifs.length} abonnement${actifs.length > 1 ? 's' : ''} actif${actifs.length > 1 ? 's' : ''} · ${eur(total * 12)} par an</span></div>
