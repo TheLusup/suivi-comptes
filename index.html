@@ -650,6 +650,8 @@ function buildModel(raw, source) {
     exclues: (b.exclues || ['Épargne', 'Virement interne']).map(normKey),
     pnl: b.pnl || null,
     abonnements: Array.isArray(b.abonnements) ? b.abonnements : [],
+    // Noms de prestataires et repères propres au foyer utilisés par la page Conseils (gardés hors du code publié)
+    conseils: b.conseils || {},
   };
 
   const positions = [];
@@ -2163,7 +2165,7 @@ function pageEpargne(M, state) {
         <tbody>${rows}</tbody>
         <tfoot><tr><td colspan="2">Total</td><td class="num">${eur(total)}</td><td class="num">${idsV.length ? eur(vers) : '—'}</td><td class="num">${pv == null ? '—' : UI.delta(pv)}</td><td class="num">${pv != null && vers ? pctSigned(pv / vers) : '—'}</td><td class="num">${pctSigned(p12.pct)}</td><td class="num">${triCell(tri)}</td><td></td></tr></tfoot>
         </table></div>
-        <p class="small muted">Performance 12 mois calculée hors versements (méthode de Dietz simplifiée). TRI : taux de rendement interne annualisé depuis le premier relevé du compte, qui tient compte de la date de chaque versement et retrait (relevés mensuels). « — » : versements non renseignés dans soldes.csv ou moins de 3 mois d’historique. PEA : versements estimés à partir du prix de revient ; fonds monétaire Revolut : historique reconstitué.</p>`,
+        <p class="small muted">Performance 12 mois calculée hors versements (méthode de Dietz simplifiée). TRI : taux de rendement interne annualisé depuis le premier relevé du compte, qui tient compte de la date de chaque versement et retrait (relevés mensuels). « — » : versements non renseignés dans soldes.csv ou moins de 3 mois d’historique. PEA : versements estimés à partir du prix de revient ; fonds monétaire en devises : historique reconstitué.</p>`,
         { sub: `${comptesVue.length} compte${comptesVue.length > 1 ? 's' : ''} · versé, plus-value, performance, TRI, poids`, state })}
     </div>`;
 
@@ -2263,10 +2265,26 @@ function pageParametres(M, state) {
 /* ---------- Recommandations ----------
    Pistes classées par priorité (haute, moyenne, basse), recalculées à chaque chargement à partir des données :
    la priorité et les montants suivent la situation du moment. Ce sont des repères de bonne gestion (épargne de
-   précaution, budget, frais, concentration des placements), pas un conseil en investissement personnalisé. */
+   précaution, budget, frais, concentration des placements), pas un conseil en investissement personnalisé.
+   Les noms de prestataires et repères propres au foyer (employeur, gestionnaire, banques, offres comparées) viennent
+   de budget.json → "conseils", dans le dépôt privé : le code publié n'en contient aucun. */
 
 const PLAFONDS_LIVRETS = { 'livret-a': 22950, ldds: 12000, lep: 10000 };
-const METAL = { mois: 18.99, an: 185, date: '09/07/2026' };   // tarif Revolut Metal en France
+// Repères du foyer (budget.json → "conseils"), avec des libellés génériques à défaut
+function reperesConseils(M) {
+  const c = M.budget.conseils || {}, b = c.banque || {};
+  return {
+    frais: { nom: 'votre gestionnaire', motif: '', ...(c.frais || {}) },
+    pee: { employeur: 'votre employeur', gestionnaire: 'votre gestionnaire', detail: '', ...(c.pee || {}) },
+    per: { detail: '', ...(c.per || {}) },
+    pension: { gestionnaire: 'votre gestionnaire', ...(c.pension || {}) },
+    fondsMonetaire: { detail: '', ...(c.fondsMonetaire || {}) },
+    banque: { actuelle: 'votre banque principale', cible: 'une banque en ligne', neo: 'la néobanque', offre: 'l’offre actuelle',
+      offreSup: 'l’offre supérieure', prixAn: 0, prixMois: 0, tarifDu: '', prelevements: 'placements, assurance emprunteur, abonnements',
+      contratVie: '', avantage: '', motifAvantage: '', motifLivraison: '', gainParCommande: 2.5, partenaires: '', motifPartenaires: '', ...b },
+  };
+}
+const motifRe = m =>{ try { return m ? new RegExp(m, 'i') : null; } catch { return null; } };
 const NIVEAUX = {
   haute: { label: 'Haute', cls: 'critical', ordre: 0 },
   moyenne: { label: 'Moyenne', cls: 'warning', ordre: 1 },
@@ -2289,6 +2307,7 @@ function recommandations(M) {
   const budget = F.budget(V, cm);
   const revenus12 = moy(P12.map(p => p.revenus));
   const ops12 = M.transactions.filter(t => t.date >= m12[0] + '-01' && t.date < cm + '-01');
+  const R = reperesConseils(M);
 
   // 1. Épargne de précaution : livrets et fonds monétaire, rapportés aux sorties mensuelles (charges + capital du crédit)
   const dispo = M.comptes.filter(c => F.classe(c) === 'epargne' && F.ouvert(c, today)).reduce((s, c) => s + F.valeur(M, c.id, today) * c.quotePart, 0);
@@ -2310,8 +2329,9 @@ function recommandations(M) {
   if (rouges.length) {
     const pire = Math.min(...rouges.map(s => s.solde)), recent = rouges.some(s => s.date > D.endOfMonth(D.addMonths(cm, -6)));
     const noms = [...new Set(rouges.map(s => compte(s.compte).nom))];
+    const jourEcheance = M.immobilier?.[0]?.echeancier?.[0]?.date?.slice(8, 10);
     ajout(recent ? 'haute' : 'moyenne', 'Sécurité', `Éviter les fins de mois à découvert (${rouges.length} en 12 mois)`,
-      `${noms.join(', ')} : ${rouges.map(s => `${eur(s.solde)} au ${D.fmt(s.date)}`).join(', ')}. Le compte joint porte l’échéance du prêt, prélevée vers le 27.`,
+      `${noms.join(', ')} : ${rouges.map(s => `${eur(s.solde)} au ${D.fmt(s.date)}`).join(', ')}.${jourEcheance ? ` Le compte joint porte l’échéance du prêt, prélevée vers le ${Number(jourEcheance)}.` : ''}`,
       `Garder un coussin d’au moins ${eur(Math.ceil(-pire / 100) * 100 + 200)} sur ${noms.length > 1 ? 'ces comptes' : 'ce compte'}, et caler les virements d’alimentation du compte joint (les vôtres et ceux du conjoint) avant l’échéance du prêt.`, '#depenses');
   }
 
@@ -2383,35 +2403,36 @@ function recommandations(M) {
       `Beaucoup de fonds se recouvrent (plusieurs fonds actions monde) sans diversifier davantage, et les fonds thématiques ont en général des frais plus élevés et plus de volatilité. Une revue annuelle (frais de chaque fonds, recouvrements, lignes trop petites pour compter) aide à garder un contrat lisible. Les arbitrages à l’intérieur du contrat ne sont pas imposés.`, '#epargne');
   }
 
-  // 10. Frais de gestion Mon Petit Placement
-  const mpp = -ops12.filter(t => /petit placement/i.test(t.libelle) && t.montant < 0).reduce((s, t) => s + t.montant, 0);
+  // 10. Frais de gestion de l'assurance vie et du PER (prestataire et libellé dans budget.json → conseils.frais)
+  const reFrais = motifRe(R.frais.motif);
+  const mpp = reFrais ? -ops12.filter(t => reFrais.test(t.libelle) && t.montant < 0).reduce((s, t) => s + t.montant, 0) : 0;
   if (mpp > 0) {
     const encours = valeur('av') + valeur('per');
-    ajout(mpp / encours > 0.006 ? 'moyenne' : 'basse', 'Frais', `Frais Mon Petit Placement : ${eur(mpp)} sur 12 mois`,
-      `Prélevés chaque trimestre sur le compte LCL, soit ${pct(mpp / encours)} de l’encours assurance vie + PER (${eur(encours)}), en plus des frais propres à chaque fonds.`,
+    ajout(mpp / encours > 0.006 ? 'moyenne' : 'basse', 'Frais', `Frais de gestion (${esc(R.frais.nom)}) : ${eur(mpp)} sur 12 mois`,
+      `Prélevés chaque trimestre sur le compte courant, soit ${pct(mpp / encours)} de l’encours assurance vie + PER (${eur(encours)}), en plus des frais propres à chaque fonds.`,
       `Comparer chaque année le coût total (frais de gestion + frais des fonds) avec d’autres contrats. Ne pas clôturer pour autant un contrat d’assurance vie ancien : sa date d’ouverture compte pour la fiscalité (après 8 ans).`, '#epargne');
   }
 
   // 11. Fonds monétaire en livres
   const gbp = valeur('revolut-epargne');
-  if (gbp > 500) ajout('basse', 'Placements', `Fonds monétaire Revolut en livres : ${eur(gbp)}`,
-    `Placé en livres sterling : sa valeur en euros varie avec le change. Son historique est reconstitué, avec un écart d’environ 1 535 £ qu’aucun export n’explique.`,
+  if (gbp > 500) ajout('basse', 'Placements', `Fonds monétaire en livres : ${eur(gbp)}`,
+    `Placé en livres sterling : sa valeur en euros varie avec le change. Son historique est reconstitué${R.fondsMonetaire.detail ? `, ${esc(R.fondsMonetaire.detail)}` : ''}.`,
     `S’il n’y a pas de dépense prévue en livres, c’est une épargne de précaution exposée au change. Vérifier aussi dans l’application le relevé du fonds pour expliquer l’écart.`, '#epargne');
 
   // 12. PEE : abondement de l'employeur
-  if (valeur('pee') > 0 || compte('pee')) ajout('moyenne', 'Placements', `PEE : vérifier le plafond d’abondement KPMG`,
-    `Vos versements volontaires (600 € par an) ont été abondés par KPMG : 451,50 € en 2024, 541,80 € en 2025 et 2026.`,
-    `L’abondement est un complément immédiat versé par l’employeur, souvent le placement le plus rentable disponible, en échange d’un blocage de 5 ans (avec cas de déblocage anticipé). Vérifier dans l’accord ou sur l’espace Natixis si un versement plus élevé serait encore abondé.`, '#epargne');
+  if (valeur('pee') > 0 || compte('pee')) ajout('moyenne', 'Placements', `PEE : vérifier le plafond d’abondement (${esc(R.pee.employeur)})`,
+    R.pee.detail ? esc(R.pee.detail) : `Vos versements volontaires sur le PEE sont abondés par ${esc(R.pee.employeur)}.`,
+    `L’abondement est un complément immédiat versé par l’employeur, souvent le placement le plus rentable disponible, en échange d’un blocage de 5 ans (avec cas de déblocage anticipé). Vérifier dans l’accord ou sur l’espace ${esc(R.pee.gestionnaire)} si un versement plus élevé serait encore abondé.`, '#epargne');
 
   // 13. PER : intérêt fiscal selon la tranche d'imposition
   if (valeur('per') > 0) ajout('basse', 'Fiscalité', `PER : vérifier que la déduction fiscale vaut le blocage`,
-    `${eur(valeur('per'))} sur le PER, alimenté chaque mois depuis avril 2026. L’argent est bloqué jusqu’à la retraite (sauf achat de la résidence principale et accidents de la vie).`,
+    `${eur(valeur('per'))} sur le PER${R.per.detail ? `, ${esc(R.per.detail)}` : ''}. L’argent est bloqué jusqu’à la retraite (sauf achat de la résidence principale et accidents de la vie).`,
     `Les versements se déduisent du revenu imposable : l’économie d’impôt est égale à votre tranche marginale (TMI). Vérifier sur l’avis d’impôt la TMI et le plafond « épargne retraite » disponible ; l’intérêt est fort à 30 % et plus, faible à 11 %.`, '#epargne');
 
   // 14. Pension britannique dormante
   if (valeur('pension-uk') > 0) ajout('basse', 'Placements', `Pension britannique : ${eur(valeur('pension-uk'))} sans cotisations depuis 2021`,
-    `Plan Royal London « paid up », investi dans un portefeuille piloté.`,
-    `Garder l’adresse et l’e-mail à jour chez Royal London et vérifier une fois par an les frais annuels. Un transfert vers la France est complexe (régime fiscal spécifique, frais) : rarement intéressant pour ce montant.`, '#epargne');
+    `Plan ${esc(R.pension.gestionnaire)} « paid up », investi dans un portefeuille piloté.`,
+    `Garder l’adresse et l’e-mail à jour chez ${esc(R.pension.gestionnaire)} et vérifier une fois par an les frais annuels. Un transfert vers la France est complexe (régime fiscal spécifique, frais) : rarement intéressant pour ce montant.`, '#epargne');
 
   // 15. Crédit immobilier : rembourser par anticipation ou épargner
   const bien = M.immobilier?.[0];
@@ -2419,78 +2440,85 @@ function recommandations(M) {
     `Votre part du capital restant dû : ${eur(Immo.crd(bien, today) * Immo.part(bien))}. Rembourser par anticipation « rapporte » le taux du crédit, sans risque, mais immobilise l’argent dans le bien.`,
     `Tant que l’épargne de précaution n’est pas complète, elle passe avant. Ensuite, comparer le taux du crédit (${nb(parseNum(bien.pret.taux), 2)} %) au rendement net des livrets et des placements ; vérifier aussi dans l’offre de prêt les indemnités de remboursement anticipé.`, '#immobilier');
 
-  // 16. Frais bancaires : renvoi vers la comparaison LCL / Revolut
-  const banque = fraisBancaires(M, ops12);
+  // 16. Frais bancaires : renvoi vers la comparaison des banques
+  const banque = fraisBancaires(M, ops12), B = R.banque;
   ajout('basse', 'Banque', `Frais bancaires : ${eur(banque.total)} sur 12 mois`,
-    `LCL ${eur(banque.lcl)} (carte ${eur(banque.carte)}, virements ${eur(banque.virements)}, tenue de compte compensée par la remise fidélité) · Revolut ${eur(banque.revolut)} (abonnement).`,
-    `Les frais sont déjà bas : changer de banque pour les frais seuls ne rapporte presque rien. Voir la comparaison LCL / Revolut Metal plus bas.`, '#recommandations');
+    `${esc(B.actuelle)} ${eur(banque.principale)} (carte ${eur(banque.carte)}, virements ${eur(banque.virements)}) · ${esc(B.neo)} ${eur(banque.neo)} (abonnement).`,
+    `Les frais sont déjà bas : changer de banque pour les frais seuls ne rapporte presque rien. Voir la comparaison des banques plus bas.`, '#recommandations');
 
   return recos.sort((a, b) => NIVEAUX[a.niveau].ordre - NIVEAUX[b.niveau].ordre);
 }
 
-// Frais bancaires des 12 derniers mois, hors frais de gestion des placements et hors arrondis RevPoints
+// Frais bancaires des 12 derniers mois, hors frais de gestion des placements (conseils.frais) et hors arrondis RevPoints
+const reFraisGestion = M => motifRe(reperesConseils(M).frais.motif);
 function fraisBancaires(M, ops12) {
-  const f = ops12.filter(t => normKey(t.categorie) === normKey('Banque & frais') && !/petit placement|revpoints/i.test(t.libelle));
+  const f = ops12.filter(t => normKey(t.categorie) === normKey('Banque & frais') && !/revpoints/i.test(t.libelle) && !(reFraisGestion(M)?.test(t.libelle)));
   const somme = l => -l.reduce((s, t) => s + t.montant, 0);
-  const lcl = f.filter(t => t.compte === 'courant'), revolut = f.filter(t => t.compte.startsWith('revolut'));
-  return { lcl: somme(lcl), revolut: somme(revolut), total: somme(f),
-    carte: somme(lcl.filter(t => /carte/i.test(t.libelle))), virements: somme(lcl.filter(t => /virement/i.test(t.libelle))) };
+  const principale = f.filter(t => t.compte === 'courant'), neo = f.filter(t => t.compte.startsWith('revolut'));
+  return { principale: somme(principale), neo: somme(neo), total: somme(f),
+    carte: somme(principale.filter(t => /carte/i.test(t.libelle))), virements: somme(principale.filter(t => /virement/i.test(t.libelle))) };
 }
 
-// Fermer LCL (banque principale : BoursoBank) et garder Revolut Plus ou passer à Metal : coût de chaque option et,
-// pour Metal, ce qui compense son surcoût d'après vos opérations des 12 derniers mois (Uber, dépenses Revolut,
-// abonnements partenaires déjà payés, voyages). Les estimations sont des ordres de grandeur.
+// Quitter la banque principale pour une banque en ligne, et garder l'offre actuelle de la néobanque ou passer à son
+// offre supérieure : coût de chaque option et, pour l'offre supérieure, ce qui compense son surcoût d'après vos
+// opérations des 12 derniers mois (avantage inclus, dépenses par carte, abonnements partenaires déjà payés, voyages).
+// Noms, tarifs et libellés viennent de budget.json → conseils.banque ; sans tarif, la carte n'est pas affichée.
 function comparaisonBanque(M) {
+  const B = reperesConseils(M).banque;
+  if (!(parseNum(B.prixAn) > 0)) return '';
   const today = D.today(), cm = F.moisCourant();
   const dans12 = t => t.date >= D.addMonths(cm, -12) + '-01' && t.date < cm + '-01';
   const ops12 = M.transactions.filter(dans12);
   const fb = fraisBancaires(M, ops12);
-  const lcl = M.comptes.filter(c => c.banque === 'LCL' && F.ouvert(c, today) && F.valeur(M, c.id, today) > 0);
+  const actuels = M.comptes.filter(c => c.banque === B.actuelle && F.ouvert(c, today) && F.valeur(M, c.id, today) > 0);
   const somme = l => -l.reduce((s, t) => s + t.montant, 0);
   // Voyages à votre part (compte joint pour moitié), comme dans le budget
   const voyages = somme(vueDepenses(M, '').transactions.filter(t => dans12(t) && normKey(t.categorie) === normKey('Voyages')));
-  // Uber : livraisons (Uber One supprime les frais de livraison et réduit les frais de service) et courses
-  const uber = ops12.filter(t => t.montant < 0 && /\buber\b|\bubr\b/i.test(t.libelle));
-  const eats = uber.filter(t => /eats|pending/i.test(t.libelle)), courses = uber.filter(t => !/eats|pending/i.test(t.libelle));
-  const gainUber = eats.length * 2.5;   // ≈ 2,50 € de frais évités par commande (estimation)
-  // Dépenses par carte Revolut (euros et devises), base des RevPoints
+  // Avantage inclus (ex. abonnement de livraison) : frais évités sur chaque commande
+  const reAv = motifRe(B.motifAvantage), reLiv = motifRe(B.motifLivraison);
+  const avOps = reAv ? ops12.filter(t => t.montant < 0 && reAv.test(t.libelle)) : [];
+  const livraisons = reLiv ? avOps.filter(t => reLiv.test(t.libelle)) : avOps, autresAv = avOps.filter(t => !livraisons.includes(t));
+  const gainAvantage = livraisons.length * (parseNum(B.gainParCommande) || 0);
+  // Dépenses par carte de la néobanque (euros et devises), base des points de fidélité
   const horsCarte = ['Virement interne', 'Épargne', 'Entre amis'].map(normKey);
   const cartes = id => somme(ops12.filter(t => t.compte === id && t.montant < 0 && !horsCarte.includes(normKey(t.categorie))));
-  const revEur = cartes('revolut'), revDev = cartes('revolut-devises'), revTot = revEur + revDev;
-  const points = [revTot * 0.005, revTot * 0.01];   // de 1 point pour 2 € à 1 point par euro, 1 point ≈ 1 centime
-  // Abonnements partenaires de Metal déjà payés aujourd'hui
-  const partenaires = somme(ops12.filter(t => t.montant < 0 && /nord ?vpn|duolingo|chess\.com|financial times|ft\.com/i.test(t.libelle)));
-  const surcout = METAL.an - fb.revolut, bas = gainUber + points[0] + partenaires, haut = gainUber + points[1] + partenaires;
+  const neoEur = cartes('revolut'), neoDev = cartes('revolut-devises'), neoTot = neoEur + neoDev;
+  const points = [neoTot * 0.005, neoTot * 0.01];   // de 1 point pour 2 € à 1 point par euro, 1 point ≈ 1 centime
+  // Abonnements partenaires de l'offre supérieure déjà payés aujourd'hui
+  const reP = motifRe(B.motifPartenaires);
+  const partenaires = reP ? somme(ops12.filter(t => t.montant < 0 && reP.test(t.libelle))) : 0;
+  const prixAn = parseNum(B.prixAn), surcout = prixAn - fb.neo, bas = gainAvantage + points[0] + partenaires, haut = gainAvantage + points[1] + partenaires;
+  const sup = esc(B.offreSup), neo = esc(B.neo), act = esc(B.actuelle), cible = esc(B.cible);
   const verdict = bas >= surcout
-    ? `même en hypothèse basse, vous récupérez ≈ ${eur(bas)} à ${eur(haut)} pour ${eur(surcout)} de plus : Metal se rentabilise, de peu, surtout grâce à Uber One ; l’assurance voyage vient en plus.`
+    ? `même en hypothèse basse, vous récupérez ≈ ${eur(bas)} à ${eur(haut)} pour ${eur(surcout)} de plus : l’offre ${sup} se rentabilise, de peu${B.avantage ? `, surtout grâce à ${esc(B.avantage)}` : ''} ; l’assurance voyage vient en plus.`
     : haut >= surcout
-      ? `≈ ${eur(bas)} à ${eur(haut)} récupérés pour ${eur(surcout)} de plus : à peu près l’équilibre. Metal devient rentable si vous utilisez son assurance voyage ou un abonnement que vous paieriez de toute façon.`
-      : `au plus ${eur(haut)} récupérés pour ${eur(surcout)} de plus : Metal ne se rentabilise pas avec vos habitudes actuelles, sauf par l’assurance voyage.`;
+      ? `≈ ${eur(bas)} à ${eur(haut)} récupérés pour ${eur(surcout)} de plus : à peu près l’équilibre. L’offre ${sup} devient rentable si vous utilisez son assurance voyage ou un abonnement que vous paieriez de toute façon.`
+      : `au plus ${eur(haut)} récupérés pour ${eur(surcout)} de plus : l’offre ${sup} ne se rentabilise pas avec vos habitudes actuelles, sauf par l’assurance voyage.`;
   return `
-    <p>LCL porte aujourd’hui : ${lcl.map(c => `${esc(c.nom)} ${eur(F.valeur(M, c.id, today))}`).join(', ')}, plus le salaire et les prélèvements (Mon Petit Placement, Kereis, abonnements).</p>
+    <p>${act} porte aujourd’hui : ${actuels.map(c => `${esc(c.nom)} ${eur(F.valeur(M, c.id, today))}`).join(', ')}, plus le salaire et les prélèvements (${esc(B.prelevements)}).</p>
     <div class="table-wrap"><table>
       <thead><tr><th>Option</th><th class="num">Coût par an</th><th>Ce que ça implique</th></tr></thead>
       <tbody>
-        <tr><td><strong>Aujourd’hui : LCL + Revolut Plus</strong></td><td class="num">${eur(fb.lcl + fb.revolut)}</td>
-          <td>LCL ${eur(fb.lcl)} (carte et virements, tenue de compte compensée par la remise fidélité), Revolut Plus ${eur(fb.revolut)}.</td></tr>
-        <tr><td><strong>BoursoBank principale + Revolut Plus</strong></td><td class="num">${eur(fb.revolut)}</td>
-          <td>${eur(fb.lcl)} d’économie, une banque de moins. BoursoBank propose le Livret A et le LDDS, mais ils ne se transfèrent pas : clôturer ceux de LCL, puis rouvrir et réalimenter. Déplacer le salaire et les prélèvements ; vérifier dans l’offre de prêt une éventuelle clause de domiciliation ; garder LCL Vie Jeunes ouverte si LCL l’accepte sans compte (date fiscale).</td></tr>
-        <tr><td><strong>BoursoBank principale + Revolut Metal</strong></td><td class="num">${eur(METAL.an)}<div class="muted small">ou ${eur(METAL.mois, true)}/mois sans engagement</div></td>
-          <td>Mêmes démarches. ${eur(surcout)} de plus que Plus : à compenser par les avantages ci-dessous.</td></tr>
+        <tr><td><strong>Aujourd’hui : ${act} + ${neo} ${esc(B.offre)}</strong></td><td class="num">${eur(fb.principale + fb.neo)}</td>
+          <td>${act} ${eur(fb.principale)} (carte et virements), ${neo} ${eur(fb.neo)}.</td></tr>
+        <tr><td><strong>${cible} principale + ${neo} ${esc(B.offre)}</strong></td><td class="num">${eur(fb.neo)}</td>
+          <td>${eur(fb.principale)} d’économie, une banque de moins. Le Livret A et le LDDS ne se transfèrent pas : les clôturer, puis les rouvrir et les réalimenter dans la nouvelle banque. Déplacer le salaire et les prélèvements ; vérifier dans l’offre de prêt une éventuelle clause de domiciliation${B.contratVie ? ` ; garder ${esc(B.contratVie)} ouvert si la banque l’accepte sans compte (date fiscale)` : ''}.</td></tr>
+        <tr><td><strong>${cible} principale + ${neo} ${sup}</strong></td><td class="num">${eur(prixAn)}${parseNum(B.prixMois) ? `<div class="muted small">ou ${eur(parseNum(B.prixMois), true)}/mois sans engagement</div>` : ''}</td>
+          <td>Mêmes démarches. ${eur(surcout)} de plus que l’offre actuelle : à compenser par les avantages ci-dessous.</td></tr>
       </tbody></table></div>
-    <h3 class="cats-titre">Metal paie-t-il ses ${eur(surcout)} de plus ? Vos 12 derniers mois</h3>
+    <h3 class="cats-titre">L’offre ${sup} paie-t-elle ses ${eur(surcout)} de plus ? Vos 12 derniers mois</h3>
     <ul class="attentions">
-      <li class="attention"><span class="status good">✓</span><div><strong>Uber One : ≈ ${eur(gainUber)} par an</strong><div class="muted small">${eats.length} commandes Uber Eats (${eur(somme(eats))}) et ${courses.length} courses (${eur(somme(courses))}). Estimation : environ 2,50 € de frais évités par commande.</div></div></li>
-      <li class="attention"><span class="status good">✓</span><div><strong>RevPoints : ≈ ${eur(points[0])} à ${eur(points[1])} par an</strong><div class="muted small">${eur(revTot)} payés par carte Revolut (${eur(revEur)} en euros, ${eur(revDev)} en devises). De 1 point pour 2 € à 1 point par euro, 1 point ≈ 1 mile ≈ 1 centime : taux de Metal à vérifier dans l’application.</div></div></li>
-      <li class="attention"><span class="status ${partenaires > 0 ? 'good' : 'neutral'}">${partenaires > 0 ? '✓' : '●'}</span><div><strong>NordVPN, Duolingo, Chess.com, Financial Times : ${eur(partenaires)} payés</strong><div class="muted small">${partenaires > 0 ? 'Ces abonnements, inclus dans Metal, seraient économisés.' : 'Vous n’en payez aucun aujourd’hui : leur valeur affichée ne compte que si vous les utiliseriez et les paieriez de toute façon (le Financial Times seul couvrirait le surcoût).'}</div></div></li>
-      <li class="attention"><span class="status warning">●</span><div><strong>Assurance voyage et annulation : le vrai argument</strong><div class="muted small">${eur(voyages)} de voyages à votre part sur 12 mois, dont ${eur(revDev)} payés en devises sur Revolut. Utile si elle vous évite une assurance à chaque voyage ; peu utile si votre carte BoursoBank couvre déjà l’essentiel.</div></div></li>
+      ${B.avantage ? `<li class="attention"><span class="status good">✓</span><div><strong>${esc(B.avantage)} : ≈ ${eur(gainAvantage)} par an</strong><div class="muted small">${livraisons.length} commandes (${eur(somme(livraisons))})${autresAv.length ? ` et ${autresAv.length} autres achats (${eur(somme(autresAv))})` : ''}. Estimation : environ ${eur(parseNum(B.gainParCommande) || 0, true)} de frais évités par commande.</div></div></li>` : ''}
+      <li class="attention"><span class="status good">✓</span><div><strong>Points de fidélité : ≈ ${eur(points[0])} à ${eur(points[1])} par an</strong><div class="muted small">${eur(neoTot)} payés par carte ${neo} (${eur(neoEur)} en euros, ${eur(neoDev)} en devises). De 1 point pour 2 € à 1 point par euro, 1 point ≈ 1 centime : taux à vérifier dans l’application.</div></div></li>
+      ${B.partenaires ? `<li class="attention"><span class="status ${partenaires > 0 ? 'good' : 'neutral'}">${partenaires > 0 ? '✓' : '●'}</span><div><strong>${esc(B.partenaires)} : ${eur(partenaires)} payés</strong><div class="muted small">${partenaires > 0 ? 'Ces abonnements, inclus dans l’offre, seraient économisés.' : 'Vous n’en payez aucun aujourd’hui : leur valeur affichée ne compte que si vous les utiliseriez et les paieriez de toute façon.'}</div></div></li>` : ''}
+      <li class="attention"><span class="status warning">●</span><div><strong>Assurance voyage et annulation : le vrai argument</strong><div class="muted small">${eur(voyages)} de voyages à votre part sur 12 mois, dont ${eur(neoDev)} payés en devises. Utile si elle vous évite une assurance à chaque voyage ; peu utile si la carte de votre banque principale couvre déjà l’essentiel.</div></div></li>
     </ul>
-    <p class="small"><strong>Lecture :</strong> fermer LCL rapporte ${eur(fb.lcl)} par an, avec ou sans Metal : c’est une décision à part. Pour Metal, ${verdict} Metal étant sans engagement au mois, essayez-le quelques mois et revenez sur Plus si vous n’utilisez pas Uber One.</p>
-    <p class="small muted">Tarif Revolut Metal en France depuis le ${METAL.date} ; la liste des abonnements inclus varie selon le pays et a changé en 2026 : vérifiez-la dans l’application avant de souscrire.</p>`;
+    <p class="small"><strong>Lecture :</strong> quitter ${act} rapporte ${eur(fb.principale)} par an, avec ou sans l’offre ${sup} : c’est une décision à part. Pour l’offre ${sup}, ${verdict} ${parseNum(B.prixMois) ? `Elle est sans engagement au mois : essayez-la quelques mois et revenez à l’offre actuelle si vous n’en utilisez pas les avantages.` : ''}</p>
+    ${B.tarifDu ? `<p class="small muted">Tarif en vigueur depuis le ${esc(B.tarifDu)} ; la liste des avantages inclus varie selon le pays : vérifiez-la dans l’application avant de souscrire.</p>` : ''}`;
 }
 
 function pageRecommandations(M, state) {
-  const recos = recommandations(M);
+  const recos = recommandations(M), B = reperesConseils(M).banque, comparaison = comparaisonBanque(M);
   const filtre = NIVEAUX[state.niveauReco] ? state.niveauReco : '';
   const compte = n => recos.filter(r => r.niveau === n).length;
   const liste = recos.filter(r => !filtre || r.niveau === filtre).map((r, i) => `
@@ -2517,7 +2545,7 @@ function pageRecommandations(M, state) {
         ${Object.entries(NIVEAUX).map(([k, n]) => `<button class="onglet" data-niveau="${k}" aria-pressed="${filtre === k}">${n.label} (${compte(k)})</button>`).join('')}
       </div>
       <section class="span-12"><ol class="recos">${liste}</ol></section>
-      ${UI.card('Fermer LCL ? Passer à Revolut Metal ?', comparaisonBanque(M), { sub: 'Coûts, démarches et ce que Metal vous rapporterait d’après vos 12 derniers mois', cls: 'span-12' })}
+      ${comparaison ? UI.card(`Quitter ${esc(B.actuelle)} ? Passer à ${esc(B.neo)} ${esc(B.offreSup)} ?`, comparaison, { sub: 'Coûts, démarches et ce que l’offre supérieure vous rapporterait d’après vos 12 derniers mois', cls: 'span-12' }) : ''}
     </div>`;
   return { html, after() {
     document.querySelectorAll('.onglet[data-niveau]').forEach(b => b.addEventListener('click', () => {
@@ -2570,7 +2598,7 @@ function hypothesesParDefaut(M) {
     loyer: 750, vacance: 0.5, chargesLoc: 150, revalLoyer: 1.5, revalCharges: 2, revalBien: 1.5, detention: 20,
     taux: 3.65, duree: 25, assurance: 0.30 };
 }
-const PERSONNES = [{ cle: 'Moi', nom: 'Benjamin' }, { cle: 'Conjoint', nom: 'Conjoint' }];
+const PERSONNES = [{ cle: 'Moi', nom: 'Vous' }, { cle: 'Conjoint', nom: 'Conjoint' }];
 // Revenus mensuels retenus d'une personne : salaire sur n mois ramené au mois, plus la part retenue des primes
 const revenusPersonne = (v, cle) => v['sal' + cle] * (v['mois' + cle] || 12) / 12 + v['primes' + cle] * v['part' + cle] / 100 / 12 + v['autres' + cle];
 
@@ -2667,7 +2695,7 @@ function pageLocatif(M, state) {
             ${PERSONNES.map(p => `<span class="champ-unite"><input type="number" inputmode="decimal" min="0" step="${pas}" id="lp-${cle}${p.cle}" value="${esc(h[cle + p.cle])}" aria-label="${label} — ${p.nom}"><span>${unite}</span></span>`).join('')}</div>`).join('')}
           <div role="row" class="duo-ligne duo-total"><span class="duo-lib">Revenus retenus par mois</span>${PERSONNES.map(p => `<strong class="num" id="lr-rev-${p.cle}">—</strong>`).join('')}</div>
         </div>
-        <p class="small muted">Benjamin : salaire pré-rempli d’après les virements KPMG, donc <strong>après</strong> prélèvement à la source ; remplacez-le par le net avant impôt de la fiche de paie. Primes : moyenne annuelle sur les années disponibles dans vos données (au plus 3 ans).</p>
+        <p class="small muted">Vous : salaire pré-rempli d’après vos virements de salaire, donc <strong>après</strong> prélèvement à la source ; remplacez-le par le net avant impôt de la fiche de paie. Primes : moyenne annuelle sur les années disponibles dans vos données (au plus 3 ans).</p>
         <h3 class="cats-titre">Le bien</h3>
         <div class="form-row">
           ${champ('prix', 'Prix d’achat négocié', 'Frais d’agence compris, hors frais de notaire.', { pas: 1000 })}
