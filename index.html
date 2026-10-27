@@ -2361,28 +2361,56 @@ function fraisBancaires(M, ops12) {
     carte: somme(lcl.filter(t => /carte/i.test(t.libelle))), virements: somme(lcl.filter(t => /virement/i.test(t.libelle))) };
 }
 
-// LCL ou Revolut Metal : ce que porte LCL, ce que coûte chaque option
+// Fermer LCL (banque principale : BoursoBank) et garder Revolut Plus ou passer à Metal : coût de chaque option et,
+// pour Metal, ce qui compense son surcoût d'après vos opérations des 12 derniers mois (Uber, dépenses Revolut,
+// abonnements partenaires déjà payés, voyages). Les estimations sont des ordres de grandeur.
 function comparaisonBanque(M) {
   const today = D.today(), cm = F.moisCourant();
-  const ops12 = M.transactions.filter(t => t.date >= D.addMonths(cm, -12) + '-01' && t.date < cm + '-01');
+  const dans12 = t => t.date >= D.addMonths(cm, -12) + '-01' && t.date < cm + '-01';
+  const ops12 = M.transactions.filter(dans12);
   const fb = fraisBancaires(M, ops12);
   const lcl = M.comptes.filter(c => c.banque === 'LCL' && F.ouvert(c, today) && F.valeur(M, c.id, today) > 0);
+  const somme = l => -l.reduce((s, t) => s + t.montant, 0);
   // Voyages à votre part (compte joint pour moitié), comme dans le budget
-  const voyages = -vueDepenses(M, '').transactions.filter(t => t.date >= D.addMonths(cm, -12) + '-01' && t.date < cm + '-01' && normKey(t.categorie) === normKey('Voyages')).reduce((s, t) => s + t.montant, 0);
+  const voyages = somme(vueDepenses(M, '').transactions.filter(t => dans12(t) && normKey(t.categorie) === normKey('Voyages')));
+  // Uber : livraisons (Uber One supprime les frais de livraison et réduit les frais de service) et courses
+  const uber = ops12.filter(t => t.montant < 0 && /\buber\b|\bubr\b/i.test(t.libelle));
+  const eats = uber.filter(t => /eats|pending/i.test(t.libelle)), courses = uber.filter(t => !/eats|pending/i.test(t.libelle));
+  const gainUber = eats.length * 2.5;   // ≈ 2,50 € de frais évités par commande (estimation)
+  // Dépenses par carte Revolut (euros et devises), base des RevPoints
+  const horsCarte = ['Virement interne', 'Épargne', 'Entre amis'].map(normKey);
+  const cartes = id => somme(ops12.filter(t => t.compte === id && t.montant < 0 && !horsCarte.includes(normKey(t.categorie))));
+  const revEur = cartes('revolut'), revDev = cartes('revolut-devises'), revTot = revEur + revDev;
+  const points = [revTot * 0.005, revTot * 0.01];   // de 1 point pour 2 € à 1 point par euro, 1 point ≈ 1 centime
+  // Abonnements partenaires de Metal déjà payés aujourd'hui
+  const partenaires = somme(ops12.filter(t => t.montant < 0 && /nord ?vpn|duolingo|chess\.com|financial times|ft\.com/i.test(t.libelle)));
+  const surcout = METAL.an - fb.revolut, bas = gainUber + points[0] + partenaires, haut = gainUber + points[1] + partenaires;
+  const verdict = bas >= surcout
+    ? `même en hypothèse basse, vous récupérez ≈ ${eur(bas)} à ${eur(haut)} pour ${eur(surcout)} de plus : Metal se rentabilise, de peu, surtout grâce à Uber One ; l’assurance voyage vient en plus.`
+    : haut >= surcout
+      ? `≈ ${eur(bas)} à ${eur(haut)} récupérés pour ${eur(surcout)} de plus : à peu près l’équilibre. Metal devient rentable si vous utilisez son assurance voyage ou un abonnement que vous paieriez de toute façon.`
+      : `au plus ${eur(haut)} récupérés pour ${eur(surcout)} de plus : Metal ne se rentabilise pas avec vos habitudes actuelles, sauf par l’assurance voyage.`;
   return `
-    <p>Ce que porte LCL aujourd’hui : ${lcl.map(c => `${esc(c.nom)} ${eur(F.valeur(M, c.id, today))}`).join(', ')}, plus le salaire et les prélèvements (Mon Petit Placement, Kereis, abonnements).</p>
+    <p>LCL porte aujourd’hui : ${lcl.map(c => `${esc(c.nom)} ${eur(F.valeur(M, c.id, today))}`).join(', ')}, plus le salaire et les prélèvements (Mon Petit Placement, Kereis, abonnements).</p>
     <div class="table-wrap"><table>
       <thead><tr><th>Option</th><th class="num">Coût par an</th><th>Ce que ça implique</th></tr></thead>
       <tbody>
-        <tr><td><strong>Garder LCL + Revolut Plus</strong> (situation actuelle)</td><td class="num">${eur(fb.lcl + fb.revolut)}</td>
-          <td>Rien à faire. Frais LCL ${eur(fb.lcl)} (carte et virements), Revolut ${eur(fb.revolut)}.</td></tr>
-        <tr><td><strong>Fermer LCL, tout sur Revolut Metal</strong></td><td class="num">${eur(METAL.an)}<div class="muted small">${eur(METAL.mois, true)}/mois sans engagement annuel</div></td>
-          <td>Le Livret A et le LDDS ne se transfèrent pas : il faut les clôturer et les rouvrir dans une banque qui les propose (une personne ne peut en avoir qu’un de chaque) ; Revolut ne les propose pas à ce jour, à vérifier. Changer la domiciliation du salaire et tous les prélèvements. Garder LCL Vie Jeunes ouverte si LCL l’accepte sans compte (date fiscale). Metal se justifie par ses avantages (assurances voyage, cashback, change) : à comparer à vos ${eur(voyages)} de voyages sur 12 mois et aux garanties de votre carte actuelle.</td></tr>
-        <tr><td><strong>Fermer LCL, tout sur BoursoBank</strong> (compte déjà ouvert)</td><td class="num">≈ 0 €</td>
-          <td>Banque en ligne où sont déjà le compte joint et le prêt (vérifier dans l’offre de prêt une éventuelle obligation de domiciliation des revenus). Mêmes démarches pour les livrets et les prélèvements. Revolut gratuit ou Plus reste utile pour les voyages.</td></tr>
+        <tr><td><strong>Aujourd’hui : LCL + Revolut Plus</strong></td><td class="num">${eur(fb.lcl + fb.revolut)}</td>
+          <td>LCL ${eur(fb.lcl)} (carte et virements, tenue de compte compensée par la remise fidélité), Revolut Plus ${eur(fb.revolut)}.</td></tr>
+        <tr><td><strong>BoursoBank principale + Revolut Plus</strong></td><td class="num">${eur(fb.revolut)}</td>
+          <td>${eur(fb.lcl)} d’économie, une banque de moins. BoursoBank propose le Livret A et le LDDS, mais ils ne se transfèrent pas : clôturer ceux de LCL, puis rouvrir et réalimenter. Déplacer le salaire et les prélèvements ; vérifier dans l’offre de prêt une éventuelle clause de domiciliation ; garder LCL Vie Jeunes ouverte si LCL l’accepte sans compte (date fiscale).</td></tr>
+        <tr><td><strong>BoursoBank principale + Revolut Metal</strong></td><td class="num">${eur(METAL.an)}<div class="muted small">ou ${eur(METAL.mois, true)}/mois sans engagement</div></td>
+          <td>Mêmes démarches. ${eur(surcout)} de plus que Plus : à compenser par les avantages ci-dessous.</td></tr>
       </tbody></table></div>
-    <p class="small"><strong>Lecture :</strong> fermer LCL économiserait au plus ${eur(fb.lcl)} par an. Passer à Metal coûterait ${eur(METAL.an - fb.revolut)} de plus que votre abonnement actuel : l’opération n’a de sens que si vous utilisez vraiment ses avantages, pas pour réduire les frais. Une banque principale de plus en moins (LCL ou Bourso) simplifie en revanche la gestion : moins de virements entre comptes, moins de comptes à suivre.</p>
-    <p class="small muted">Tarif Revolut Metal en France depuis le ${METAL.date} ; vérifiez-le dans l’application avant de souscrire.</p>`;
+    <h3 class="cats-titre">Metal paie-t-il ses ${eur(surcout)} de plus ? Vos 12 derniers mois</h3>
+    <ul class="attentions">
+      <li class="attention"><span class="status good">✓</span><div><strong>Uber One : ≈ ${eur(gainUber)} par an</strong><div class="muted small">${eats.length} commandes Uber Eats (${eur(somme(eats))}) et ${courses.length} courses (${eur(somme(courses))}). Estimation : environ 2,50 € de frais évités par commande.</div></div></li>
+      <li class="attention"><span class="status good">✓</span><div><strong>RevPoints : ≈ ${eur(points[0])} à ${eur(points[1])} par an</strong><div class="muted small">${eur(revTot)} payés par carte Revolut (${eur(revEur)} en euros, ${eur(revDev)} en devises). De 1 point pour 2 € à 1 point par euro, 1 point ≈ 1 mile ≈ 1 centime : taux de Metal à vérifier dans l’application.</div></div></li>
+      <li class="attention"><span class="status ${partenaires > 0 ? 'good' : 'neutral'}">${partenaires > 0 ? '✓' : '●'}</span><div><strong>NordVPN, Duolingo, Chess.com, Financial Times : ${eur(partenaires)} payés</strong><div class="muted small">${partenaires > 0 ? 'Ces abonnements, inclus dans Metal, seraient économisés.' : 'Vous n’en payez aucun aujourd’hui : leur valeur affichée ne compte que si vous les utiliseriez et les paieriez de toute façon (le Financial Times seul couvrirait le surcoût).'}</div></div></li>
+      <li class="attention"><span class="status warning">●</span><div><strong>Assurance voyage et annulation : le vrai argument</strong><div class="muted small">${eur(voyages)} de voyages à votre part sur 12 mois, dont ${eur(revDev)} payés en devises sur Revolut. Utile si elle vous évite une assurance à chaque voyage ; peu utile si votre carte BoursoBank couvre déjà l’essentiel.</div></div></li>
+    </ul>
+    <p class="small"><strong>Lecture :</strong> fermer LCL rapporte ${eur(fb.lcl)} par an, avec ou sans Metal : c’est une décision à part. Pour Metal, ${verdict} Metal étant sans engagement au mois, essayez-le quelques mois et revenez sur Plus si vous n’utilisez pas Uber One.</p>
+    <p class="small muted">Tarif Revolut Metal en France depuis le ${METAL.date} ; la liste des abonnements inclus varie selon le pays et a changé en 2026 : vérifiez-la dans l’application avant de souscrire.</p>`;
 }
 
 function pageRecommandations(M, state) {
@@ -2413,7 +2441,7 @@ function pageRecommandations(M, state) {
         ${Object.entries(NIVEAUX).map(([k, n]) => `<button class="onglet" data-niveau="${k}" aria-pressed="${filtre === k}">${n.label} (${compte(k)})</button>`).join('')}
       </div>
       <section class="span-12"><ol class="recos">${liste}</ol></section>
-      ${UI.card('Fermer LCL et passer sur Revolut Metal ?', comparaisonBanque(M), { sub: 'Coûts des 12 derniers mois et démarches', cls: 'span-12' })}
+      ${UI.card('Fermer LCL ? Passer à Revolut Metal ?', comparaisonBanque(M), { sub: 'Coûts, démarches et ce que Metal vous rapporterait d’après vos 12 derniers mois', cls: 'span-12' })}
     </div>`;
   return { html, after() {
     document.querySelectorAll('.onglet[data-niveau]').forEach(b => b.addEventListener('click', () => {
