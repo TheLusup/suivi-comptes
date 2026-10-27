@@ -681,18 +681,18 @@ function buildModel(raw, source) {
   });
 
   // Échéances de prêt : le capital remboursé réduit la dette, c'est de l'épargne ; seuls les intérêts restent
-  // une charge. Chaque prélèvement du montant de la mensualité (catégorie « Crédit immobilier ») est scindé
-  // d'après l'échéancier : la part de capital devient une opération « Capital remboursé ».
+  // une charge. Chaque prélèvement du montant de la mensualité (catégorie « Intérêts du crédit immobilier ») est
+  // scindé d'après l'échéancier : la part de capital devient une opération « Capital crédit immobilier ».
   immobilier.forEach(b => {
     const mens = parseNum(b.pret?.mensualite);
     if (!mens) return;
     const jours = (x, y) => Math.abs(new Date(x) - new Date(y)) / 864e5;
-    transactions.filter(t => normKey(t.categorie) === normKey('Crédit immobilier') && Math.abs(t.montant + mens) < 0.01).forEach(t => {
+    transactions.filter(t => normKey(t.categorie) === normKey('Intérêts du crédit immobilier') && Math.abs(t.montant + mens) < 0.01).forEach(t => {
       const e = b.echeancier.find(e => jours(e.date, t.date) <= 10);
       if (!e) return;
       t.montant = Math.round((t.montant + e.capital) * 100) / 100;
       transactions.push({ id: t.id + '|capital', date: t.date, montant: -e.capital, libelle: `${t.libelle} (capital)`,
-        categorie: 'Capital remboursé', categorieOrigine: 'Capital remboursé', compte: t.compte });
+        categorie: 'Capital crédit immobilier', categorieOrigine: 'Capital crédit immobilier', compte: t.compte });
     });
   });
   transactions.sort((a, b) => a.date.localeCompare(b.date));
@@ -2302,7 +2302,7 @@ function recommandations(M) {
   const valeur = id => compte(id) && F.ouvert(compte(id), today) ? F.valeur(M, id, today) : 0;
   const m12 = mois(12), m6 = mois(6), m3 = mois(3);
   const P12 = m12.map(m => F.pnl(V, m)), P6 = P12.slice(-6), P3 = P12.slice(-3);
-  const capital = p => -(p.parCat.get(normKey('Capital remboursé')) || 0);
+  const capital = p => -(p.parCat.get(normKey('Capital crédit immobilier')) || 0);
   const depCat = (cat, ms) => ms.map(m => F.depenses(V, m).parCat.get(normKey(cat))?.montant || 0);
   const budget = F.budget(V, cm);
   const revenus12 = moy(P12.map(p => p.revenus));
