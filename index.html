@@ -177,6 +177,17 @@ tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
 /* Investissement locatif */
 .locatif-kpis { margin: 0; grid-template-columns: 1fr; align-self: stretch; }
 #lr-alerte .status { white-space: normal; }
+.duo { display: grid; gap: 8px; }
+.duo-tete, .duo-ligne { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: center; }
+.duo-tete span[role="columnheader"] { font-weight: 700; font-size: 14px; color: var(--text); }
+.duo-lib { display: grid; gap: 2px; font-size: 13px; color: var(--text-2); font-weight: 500; }
+.duo-total { border-top: 1px solid var(--border); padding-top: 10px; }
+.duo-total .duo-lib { color: var(--text); font-weight: 650; }
+@media (max-width: 760px) {
+  .duo-tete, .duo-ligne { grid-template-columns: minmax(0, 1fr) minmax(86px, 112px) minmax(86px, 112px); gap: 6px; }
+  .duo-lib .small, .duo .champ-unite span { display: none; }
+  .duo input { padding-left: 10px; padding-right: 6px; }
+}
 .champ-unite { display: flex; align-items: center; gap: 8px; }
 .champ-unite input { flex: 1; min-width: 0; }
 .champ-unite span { color: var(--text-2); font-size: 13px; min-width: 22px; }
@@ -2533,15 +2544,26 @@ function coefMensuel(taux, ans, assurance) {
   return (r > 0 ? r / (1 - Math.pow(1 + r, -n)) : 1 / n) + assurance / 100 / 12;
 }
 
-// Valeurs proposées par défaut, tirées des données : salaire habituel et primes des 12 derniers mois, crédit en cours
+// Valeurs proposées par défaut, tirées des données : salaire habituel (médiane des virements de salaire des 12
+// derniers mois) et moyenne annuelle des primes sur les 3 dernières années disponibles. Une prime = la part d'un
+// virement qui dépasse de plus de 30 % le salaire habituel de l'époque (médiane des virements à ± 6 mois).
 function hypothesesParDefaut(M) {
-  const cm = F.moisCourant(), debut = D.addMonths(cm, -12) + '-01';
-  const sal = M.transactions.filter(t => t.date >= debut && t.date < cm + '-01' && t.montant > 0 && normKey(t.categorie) === normKey('Salaire')).map(t => t.montant);
-  const med = sal.length ? [...sal].sort((a, b) => a - b)[Math.floor(sal.length / 2)] : 0;
-  const primes = Math.max(0, sal.reduce((s, v) => s + v, 0) - med * sal.length);
-  return { salMoi: Math.round(med), primes: Math.round(primes / 100) * 100, partPrimes: 50, salElodie: '', autres: 0,
+  const cm = F.moisCourant(), fin = cm + '-01';
+  const ops = M.transactions.filter(t => t.date >= D.addMonths(cm, -36) + '-01' && t.date < fin && t.montant > 0 && normKey(t.categorie) === normKey('Salaire'));
+  const mediane = l => l.length ? [...l].sort((a, b) => a - b)[Math.floor(l.length / 2)] : 0;
+  const med = mediane(ops.filter(t => t.date >= D.addMonths(cm, -12) + '-01').map(t => t.montant));
+  const proches = t => ops.filter(x => Math.abs(D.diffDays(x.date, t.date)) <= 183).map(x => x.montant);
+  const surplus = ops.reduce((s, t) => { const ref = mediane(proches(t)); return s + (t.montant > 1.3 * ref ? t.montant - ref : 0); }, 0);
+  const annees = ops.length ? Math.max(1, Math.min(3, (D.diffDays(ops[0].date, fin) + 15) / 365.25)) : 1;
+  const primes = surplus / annees;
+  return {
+    salMoi: Math.round(med), moisMoi: 12, primesMoi: Math.round(primes / 100) * 100, partMoi: 70, autresMoi: 0,
+    salElodie: '', moisElodie: 12, primesElodie: 0, partElodie: 70, autresElodie: 0,
     loyer: 900, chargesLoc: 150, taux: 3.65, duree: 25, assurance: 0.30, apport: 20000, notaire: 8 };
 }
+const PERSONNES = [{ cle: 'Moi', nom: 'Benjamin' }, { cle: 'Elodie', nom: 'Élodie' }];
+// Revenus mensuels retenus d'une personne : salaire sur n mois ramené au mois, plus la part retenue des primes
+const revenusPersonne = (v, cle) => v['sal' + cle] * (v['mois' + cle] || 12) / 12 + v['primes' + cle] * v['part' + cle] / 100 / 12 + v['autres' + cle];
 
 // Crédit en cours : mensualité et assurance de l'échéance du mois (les deux emprunteurs), plus les autres crédits connus
 function creditsEnCours(M) {
@@ -2586,17 +2608,25 @@ function pageLocatif(M, state) {
       </section>
 
       ${UI.card('Vos hypothèses', `<form class="form" id="form-locatif" onsubmit="return false">
-        <div class="form-row">
-          ${champ('salMoi', 'Votre salaire net mensuel', 'D’après vos virements KPMG, après prélèvement à la source : la banque retient le net avant impôt, ajoutez-le.')}
-          ${champ('salElodie', 'Salaire net mensuel d’Élodie', 'Net avant impôt, sur 12 mois.')}
+        <h3 class="cats-titre">Revenus du foyer</h3>
+        <div class="duo" role="table" aria-label="Revenus par personne">
+          <div role="row" class="duo-tete"><span></span>${PERSONNES.map(p => `<span role="columnheader">${p.nom}</span>`).join('')}</div>
+          ${[
+            ['sal', 'Salaire net mensuel avant impôt', 'Ligne « net à payer avant impôt » de la fiche de paie.', '€', 1],
+            ['mois', 'Nombre de mois de salaire', '12, ou 13 avec un 13e mois.', 'mois', 1],
+            ['primes', 'Primes annuelles, moyenne sur 3 ans', 'Moyenne des primes et du variable des 3 dernières années.', '€', 100],
+            ['part', 'Part de la moyenne retenue', 'En général 70 % de la moyenne sur 3 ans.', '%', 5],
+            ['autres', 'Autres revenus mensuels', 'Loyers existants, pension…', '€', 1],
+          ].map(([cle, label, aide, unite, pas]) => `
+          <div role="row" class="duo-ligne"><span class="duo-lib">${label}<span class="muted small">${aide}</span></span>
+            ${PERSONNES.map(p => `<span class="champ-unite"><input type="number" inputmode="decimal" min="0" step="${pas}" id="lp-${cle}${p.cle}" value="${esc(h[cle + p.cle])}" aria-label="${label} — ${p.nom}"><span>${unite}</span></span>`).join('')}</div>`).join('')}
+          <div role="row" class="duo-ligne duo-total"><span class="duo-lib">Revenus retenus par mois</span>${PERSONNES.map(p => `<strong class="num" id="lr-rev-${p.cle}">—</strong>`).join('')}</div>
         </div>
+        <p class="small muted">Benjamin : salaire pré-rempli d’après les virements KPMG, donc <strong>après</strong> prélèvement à la source ; remplacez-le par le net avant impôt de la fiche de paie. Primes : moyenne annuelle sur les années disponibles dans vos données (au plus 3 ans).</p>
+        <h3 class="cats-titre">Le projet</h3>
         <div class="form-row">
-          ${champ('primes', 'Primes annuelles', 'Variable des 12 derniers mois, d’après vos virements.')}
-          ${champ('partPrimes', 'Part des primes retenue', 'Les banques n’en comptent souvent qu’une partie, si elles sont régulières.', { unite: '%' })}
-        </div>
-        <div class="form-row">
-          ${champ('autres', 'Autres revenus mensuels', 'Revenus locatifs existants, etc.')}
           ${champ('loyer', 'Loyer attendu du bien', 'Hors charges ; retenu à 70 % dans les revenus.')}
+          ${champ('chargesLoc', 'Charges du bien par mois', 'Taxe foncière, copropriété, assurance, gestion.')}
         </div>
         <div class="form-row">
           ${champ('taux', 'Taux du crédit', 'Environ 3,5 à 3,75 % sur 25 ans en octobre 2026.', { pas: 0.05, unite: '%' })}
@@ -2608,7 +2638,6 @@ function pageLocatif(M, state) {
         </div>
         <div class="form-row">
           ${champ('notaire', 'Frais de notaire', 'Environ 7 à 8 % dans l’ancien, 2 à 3 % dans le neuf.', { pas: 0.5, unite: '%' })}
-          ${champ('chargesLoc', 'Charges du bien par mois', 'Taxe foncière, copropriété, assurance, gestion.')}
         </div>
         <div class="row-between"><span class="small muted">Vos saisies restent dans ce navigateur.</span><button type="button" class="btn small ghost" id="lp-reset">Valeurs par défaut</button></div>
       </form>`, { sub: 'Modifiez les chiffres : le calcul se met à jour', cls: 'span-7' })}
@@ -2625,7 +2654,9 @@ function pageLocatif(M, state) {
     const lire = () => Object.fromEntries(ids.map(id => [id, parseNum(document.getElementById('lp-' + id).value) ?? 0]));
     const calculer = () => {
       const v = lire();
-      const revenus = v.salMoi + v.salElodie + v.autres + v.primes / 12 * v.partPrimes / 100;
+      const parPersonne = Object.fromEntries(PERSONNES.map(p => [p.cle, revenusPersonne(v, p.cle)]));
+      const revenus = parPersonne.Moi + parPersonne.Elodie;
+      PERSONNES.forEach(p => { document.getElementById('lr-rev-' + p.cle).textContent = eur(parPersonne[p.cle]); });
       const loyerRetenu = v.loyer * HCSF.loyerRetenu;
       const plafond = HCSF.endettement * (revenus + loyerRetenu);
       const mensualite = Math.max(0, plafond - chargesActuelles);
@@ -2648,9 +2679,7 @@ function pageLocatif(M, state) {
       const cash = v.loyer - mensualite - v.chargesLoc;
       set('lr-cashflow', v.loyer && mensualite > 0 ? `<span class="${cash < 0 ? 'neg' : 'pos'}">${eurSigned(cash)}</span>` : '—');
       const lignes = [
-        ['Salaires nets (vous + Élodie)', eur(v.salMoi + v.salElodie)],
-        [`Primes retenues (${v.partPrimes} % de ${eur(v.primes)} par an)`, eur(v.primes / 12 * v.partPrimes / 100)],
-        ['Autres revenus', eur(v.autres)],
+        ...PERSONNES.map(p => [`${p.nom} : salaire sur ${v['mois' + p.cle] || 12} mois, ${v['part' + p.cle]} % de la moyenne des primes, autres revenus`, eur(parPersonne[p.cle])]),
         [`Loyer attendu retenu à 70 % (${eur(v.loyer)})`, eur(loyerRetenu)],
         ['<strong>Revenus retenus</strong>', `<strong>${eur(revenus + loyerRetenu)}</strong>`],
         ['Plafond de mensualités (35 %)', eur(plafond)],
