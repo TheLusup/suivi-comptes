@@ -177,6 +177,8 @@ tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
 /* Investissement locatif */
 .locatif-kpis { margin: 0; grid-template-columns: 1fr; align-self: stretch; }
 #lr-alerte .status { white-space: normal; }
+.colonne { display: grid; gap: 18px; align-content: start; min-width: 0; }
+#lr-kpis-projet { margin-bottom: 16px; }
 .duo { display: grid; gap: 8px; }
 .duo-tete, .duo-ligne { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: center; }
 .duo-tete span[role="columnheader"] { font-weight: 700; font-size: 14px; color: var(--text); }
@@ -2528,12 +2530,17 @@ function pageRecommandations(M, state) {
   <script>
 'use strict';
 
-/* ---------- Investissement locatif : capacité d'emprunt résiduelle ----------
-   Règles du Haut Conseil de stabilité financière (HCSF) appliquées par les banques : mensualités de tous les crédits,
-   assurance comprise, au plus 35 % des revenus nets avant impôt ; durée au plus 25 ans. Les loyers attendus sont
-   retenus à 70 % (vacance, charges), comme le font la plupart des banques. Le crédit en cours (mensualité et
-   assurance des deux emprunteurs) vient d'immobilier.json. Les hypothèses saisies (dont le salaire d'Élodie) restent
-   dans ce navigateur : elles ne sont ni dans la page publiée ni dans le dépôt. */
+/* ---------- Investissement locatif : capacité d'emprunt et projection du projet ----------
+   Capacité : règles du Haut Conseil de stabilité financière (HCSF) appliquées par les banques ; mensualités de tous
+   les crédits, assurance comprise, au plus 35 % des revenus nets avant impôt, durée au plus 25 ans. Le loyer attendu
+   est retenu à 70 %, comme le font la plupart des banques. Le crédit en cours (mensualité et assurance des deux
+   emprunteurs) vient d'immobilier.json.
+   Projet : coût total (prix, travaux, frais de notaire) moins l'apport = crédit nécessaire ; on vérifie que sa
+   mensualité tient dans la capacité, puis on projette année par année les loyers (revalorisés, nets de la vacance),
+   les charges (indexées) et les échéances, jusqu'à la revente à la fin de la détention. Le TRI porte sur les fonds
+   propres : l'apport au départ, les cash-flows chaque année, puis le prix de revente moins le capital restant dû.
+   Montants avant impôt. Les hypothèses saisies (dont le salaire d'Élodie) restent dans ce navigateur : elles ne
+   sont ni dans la page publiée ni dans le dépôt. */
 
 const LOCATIF_KEY = 'suivi-comptes.locatif';
 const HCSF = { endettement: 0.35, loyerRetenu: 0.7 };
@@ -2559,19 +2566,58 @@ function hypothesesParDefaut(M) {
   return {
     salMoi: Math.round(med), moisMoi: 12, primesMoi: Math.round(primes / 100) * 100, partMoi: 70, autresMoi: 0,
     salElodie: '', moisElodie: 12, primesElodie: 0, partElodie: 70, autresElodie: 0,
-    loyer: 900, chargesLoc: 150, taux: 3.65, duree: 25, assurance: 0.30, apport: 20000, notaire: 8 };
+    prix: 150000, travaux: 0, notaire: 8, apport: 20000,
+    loyer: 750, vacance: 0.5, chargesLoc: 150, revalLoyer: 1.5, revalCharges: 2, revalBien: 1.5, detention: 20,
+    taux: 3.65, duree: 25, assurance: 0.30 };
 }
 const PERSONNES = [{ cle: 'Moi', nom: 'Benjamin' }, { cle: 'Elodie', nom: 'Élodie' }];
 // Revenus mensuels retenus d'une personne : salaire sur n mois ramené au mois, plus la part retenue des primes
 const revenusPersonne = (v, cle) => v['sal' + cle] * (v['mois' + cle] || 12) / 12 + v['primes' + cle] * v['part' + cle] / 100 / 12 + v['autres' + cle];
 
-// Crédit en cours : mensualité et assurance de l'échéance du mois (les deux emprunteurs), plus les autres crédits connus
+// Crédit en cours : mensualité et assurance de l'échéance du mois (les deux emprunteurs)
 function creditsEnCours(M) {
   const today = D.today();
   return (M.immobilier || []).filter(b => b.pret && b.echeancier?.length).map(b => {
     const e = b.echeancier.find(x => x.date >= today) || b.echeancier[b.echeancier.length - 1];
     return { nom: b.pret.nom || b.nom, mensualite: parseNum(b.pret.mensualite) || 0, assurance: e.assurance || 0, fin: b.echeancier[b.echeancier.length - 1].date };
   });
+}
+
+// Projection annuelle du projet : crédit amorti mois par mois, loyers et charges revalorisés, revente en fin de détention
+function projectionLocatif(v) {
+  const cout = v.prix + v.travaux + v.prix * v.notaire / 100;
+  const credit = Math.max(0, cout - v.apport), fondsPropres = Math.min(v.apport, cout);
+  const r = v.taux / 100 / 12, n = v.duree * 12;
+  const echeance = credit > 0 ? (r > 0 ? credit * r / (1 - Math.pow(1 + r, -n)) : credit / n) : 0;
+  const assurance = credit * v.assurance / 100 / 12;
+  const annees = []; let crd = credit, cumul = 0;
+  const H = Math.max(1, Math.round(v.detention));
+  for (let a = 1; a <= H; a++) {
+    let interets = 0, capital = 0, credits = 0;
+    for (let m = 0; m < 12; m++) {
+      if (crd <= 0.005) break;
+      const i = crd * r, c = Math.min(crd, echeance - i);
+      interets += i; capital += c; crd -= c; credits += echeance + assurance;
+    }
+    const loyers = v.loyer * 12 * Math.pow(1 + v.revalLoyer / 100, a - 1) * (1 - v.vacance / 12);
+    const charges = v.chargesLoc * 12 * Math.pow(1 + v.revalCharges / 100, a - 1);
+    const valeur = v.prix * Math.pow(1 + v.revalBien / 100, a);
+    const cashflow = loyers - charges - credits;
+    cumul += cashflow;
+    annees.push({ a, loyers, charges, credits, interets, capital, crd: Math.max(0, crd), cashflow, cumul, valeur });
+  }
+  const der = annees[annees.length - 1], revente = der.valeur - der.crd;
+  // TRI des fonds propres : apport, cash-flows annuels, puis revente nette du capital restant dû
+  const flux = [-fondsPropres, ...annees.map((x, i) => x.cashflow + (i === annees.length - 1 ? revente : 0))];
+  const van = t => flux.reduce((s, f, i) => s + f / Math.pow(1 + t, i), 0);
+  let tri = null;
+  if (fondsPropres > 0) {
+    let lo = -0.99, hi = 1;
+    while (van(lo) * van(hi) > 0 && hi < 1e3) hi *= 2;
+    if (van(lo) * van(hi) <= 0) { for (let k = 0; k < 200; k++) { const m = (lo + hi) / 2; if (van(lo) * van(m) <= 0) hi = m; else lo = m; } tri = (lo + hi) / 2; }
+  }
+  return { cout, credit, fondsPropres, mensualite: echeance + assurance, annees, revente, tri,
+    gainTotal: flux.reduce((s, f) => s + f, 0), effortMax: Math.min(0, ...annees.map(x => x.cashflow)) };
 }
 
 function pageLocatif(M, state) {
@@ -2583,7 +2629,7 @@ function pageLocatif(M, state) {
     <label>${label}<span class="champ-unite"><input type="number" inputmode="decimal" min="0" step="${pas}" id="lp-${id}" value="${esc(h[id])}"><span>${unite}</span></span>${aide ? `<span class="muted small">${aide}</span>` : ''}</label>`;
 
   const html = `
-    <div class="page-h"><h1>Investissement locatif</h1><p class="muted">Capacité d’emprunt résiduelle du foyer, crédit actuel compris</p></div>
+    <div class="page-h"><h1>Investissement locatif</h1><p class="muted">Capacité d’emprunt du foyer, financement du projet et projection des cash-flows</p></div>
     <div class="grid">
       <section class="card epargne-hero span-12" style="--hero-tint: color-mix(in srgb, var(--series-4) 22%, transparent)">
         <div>
@@ -2591,7 +2637,7 @@ function pageLocatif(M, state) {
           <div class="hero-value" id="lr-capacite">—</div>
           <div class="hero-deltas">
             <div><span class="muted">Mensualité possible, assurance comprise :</span> <strong id="lr-mensualite">—</strong></div>
-            <div><span class="muted">Prix de bien atteignable (apport compris, hors frais de notaire) :</span> <strong id="lr-prix">—</strong></div>
+            <div><span class="muted">Le projet :</span> <strong id="lr-verdict">—</strong></div>
             <div id="lr-alerte" class="small"></div>
           </div>
           <div class="jauge-budget">
@@ -2602,8 +2648,7 @@ function pageLocatif(M, state) {
         <div class="kpis hero-kpis locatif-kpis">
           ${UI.kpi('Revenus retenus', '<span id="lr-revenus">—</span>', 'par mois, nets avant impôt')}
           ${UI.kpi('Crédits en cours', eur(chargesActuelles), `${credits.map(c => `${esc(c.nom)}, fin ${D.fmt(c.fin)}`).join(' · ') || 'aucun'}`)}
-          ${UI.kpi('Rendement brut', '<span id="lr-rendement">—</span>', 'loyers annuels / prix du bien')}
-          ${UI.kpi('Cash-flow mensuel', '<span id="lr-cashflow">—</span>', 'loyer − mensualité − charges, avant impôt')}
+          ${UI.kpi('TRI du projet', '<span id="lr-tri">—</span>', '<span id="lr-tri-sub">sur les fonds propres, avant impôt</span>')}
         </div>
       </section>
 
@@ -2623,37 +2668,68 @@ function pageLocatif(M, state) {
           <div role="row" class="duo-ligne duo-total"><span class="duo-lib">Revenus retenus par mois</span>${PERSONNES.map(p => `<strong class="num" id="lr-rev-${p.cle}">—</strong>`).join('')}</div>
         </div>
         <p class="small muted">Benjamin : salaire pré-rempli d’après les virements KPMG, donc <strong>après</strong> prélèvement à la source ; remplacez-le par le net avant impôt de la fiche de paie. Primes : moyenne annuelle sur les années disponibles dans vos données (au plus 3 ans).</p>
-        <h3 class="cats-titre">Le projet</h3>
+        <h3 class="cats-titre">Le bien</h3>
         <div class="form-row">
-          ${champ('loyer', 'Loyer attendu du bien', 'Hors charges ; retenu à 70 % dans les revenus.')}
-          ${champ('chargesLoc', 'Charges du bien par mois', 'Taxe foncière, copropriété, assurance, gestion.')}
+          ${champ('prix', 'Prix d’achat négocié', 'Frais d’agence compris, hors frais de notaire.', { pas: 1000 })}
+          ${champ('travaux', 'Travaux et ameublement', 'Financés avec le bien.', { pas: 500 })}
         </div>
+        <div class="form-row">
+          ${champ('notaire', 'Frais de notaire', 'Environ 7 à 8 % dans l’ancien, 2 à 3 % dans le neuf.', { pas: 0.5, unite: '%' })}
+          ${champ('apport', 'Apport', 'Couvre en général au moins les frais de notaire.', { pas: 1000 })}
+        </div>
+        <h3 class="cats-titre">L’exploitation</h3>
+        <div class="form-row">
+          ${champ('loyer', 'Loyer mensuel hors charges', 'Retenu à 70 % par la banque pour la capacité.')}
+          ${champ('vacance', 'Vacance locative', 'Mois sans locataire par an, en moyenne.', { pas: 0.5, unite: 'mois' })}
+        </div>
+        <div class="form-row">
+          ${champ('chargesLoc', 'Charges non récupérables par mois', 'Taxe foncière, copropriété, assurance PNO, gestion, entretien.')}
+          ${champ('revalLoyer', 'Revalorisation des loyers', 'Par an (indice IRL).', { pas: 0.25, unite: '%' })}
+        </div>
+        <div class="form-row">
+          ${champ('revalCharges', 'Hausse des charges', 'Par an.', { pas: 0.25, unite: '%' })}
+          ${champ('revalBien', 'Valorisation du bien', 'Par an, pour la revente.', { pas: 0.25, unite: '%' })}
+        </div>
+        <div class="form-row">
+          ${champ('detention', 'Durée de détention', 'Revente à la fin, capital restant dû remboursé.', { unite: 'ans' })}
+        </div>
+        <h3 class="cats-titre">Le crédit</h3>
         <div class="form-row">
           ${champ('taux', 'Taux du crédit', 'Environ 3,5 à 3,75 % sur 25 ans en octobre 2026.', { pas: 0.05, unite: '%' })}
           ${champ('duree', 'Durée', '25 ans au plus (règle HCSF).', { unite: 'ans' })}
         </div>
         <div class="form-row">
           ${champ('assurance', 'Assurance emprunteur', 'Taux annuel sur le capital, les deux emprunteurs.', { pas: 0.01, unite: '%' })}
-          ${champ('apport', 'Apport', 'Couvre au moins les frais de notaire en général.')}
-        </div>
-        <div class="form-row">
-          ${champ('notaire', 'Frais de notaire', 'Environ 7 à 8 % dans l’ancien, 2 à 3 % dans le neuf.', { pas: 0.5, unite: '%' })}
         </div>
         <div class="row-between"><span class="small muted">Vos saisies restent dans ce navigateur.</span><button type="button" class="btn small ghost" id="lp-reset">Valeurs par défaut</button></div>
-      </form>`, { sub: 'Modifiez les chiffres : le calcul se met à jour', cls: 'span-7' })}
+      </form>`, { sub: 'Modifiez les chiffres : tout se recalcule', cls: 'span-7' })}
 
-      ${UI.card('Le calcul', `<div class="table-wrap"><table><tbody id="lr-detail"></tbody></table></div>
-        <p class="small muted">Règle HCSF : toutes les mensualités (assurance comprise) au plus 35 % des revenus nets avant impôt. Certaines banques calculent autrement pour un investissement locatif (différentiel loyer − mensualité) et regardent aussi le reste à vivre.</p>`, { sub: 'Revenus, crédits en cours, plafond de 35 %', cls: 'span-5' })}
+      <div class="span-5 colonne">
+        ${UI.card('Financement du projet', `<div class="table-wrap"><table><tbody id="lr-financement"></tbody></table></div>`, { sub: 'Coût total, crédit nécessaire et place dans la capacité' })}
+        ${UI.card('La capacité d’emprunt', `<div class="table-wrap"><table><tbody id="lr-detail"></tbody></table></div>
+          <p class="small muted">Règle HCSF : toutes les mensualités (assurance comprise) au plus 35 % des revenus nets avant impôt. Certaines banques calculent autrement pour un investissement locatif (différentiel loyer − mensualité) et regardent aussi le reste à vivre.</p>`, { sub: 'Revenus, crédits en cours, plafond de 35 %' })}
+      </div>
 
-      ${UI.card('Selon le taux et la durée', `<div class="table-wrap"><table id="lr-sensibilite"></table></div>`, { sub: 'Capacité d’emprunt, mêmes revenus et même assurance', cls: 'span-12' })}
+      ${UI.card('Projection des cash-flows', `<div class="kpis" id="lr-kpis-projet"></div>
+        ${UI.chart('ch-locatif', 260)}
+        <p class="small muted">Cash-flow annuel avant impôt : loyers encaissés (vacance déduite) − charges − échéances du crédit, assurance comprise. La revente, en fin de détention, n’est pas dans les barres : elle compte dans le TRI et le gain total.</p>`, { sub: 'Année par année, jusqu’à la revente', cls: 'span-12' })}
+
+      ${UI.repli('locatif-annees', 'Le détail année par année', `<div class="table-wrap"><table id="lr-annees"></table></div>`, { sub: 'Loyers, charges, crédit, cash-flow, capital restant dû, valeur du bien', state })}
+
+      ${UI.card('Capacité selon le taux et la durée', `<div class="table-wrap"><table id="lr-sensibilite"></table></div>`, { sub: 'Mêmes revenus, même assurance', cls: 'span-12' })}
     </div>
-    <p class="small muted">Simulation indicative : chaque banque applique ses propres critères (stabilité des revenus, apport, reste à vivre). Je ne suis pas conseiller financier agréé ; un courtier vous donnera une capacité ferme.</p>`;
+    <p class="small muted">Simulation indicative, avant impôt : l’imposition des loyers dépend du régime (micro-foncier, réel, LMNP) et peut changer nettement le résultat. Chaque banque applique ses propres critères. Je ne suis pas conseiller financier agréé ; un courtier vous donnera une capacité ferme.</p>`;
 
   return { html, after() {
+    UI.suivreReplis(state);
     const ids = Object.keys(hypothesesParDefaut(M));
+    const nbFr = x => x.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
     const lire = () => Object.fromEntries(ids.map(id => [id, parseNum(document.getElementById('lp-' + id).value) ?? 0]));
+    const set = (id, txt) => { document.getElementById(id).innerHTML = txt; };
+    let graphique = null;
     const calculer = () => {
       const v = lire();
+      // ---- Capacité d'emprunt ----
       const parPersonne = Object.fromEntries(PERSONNES.map(p => [p.cle, revenusPersonne(v, p.cle)]));
       const revenus = parPersonne.Moi + parPersonne.Elodie;
       PERSONNES.forEach(p => { document.getElementById('lr-rev-' + p.cle).textContent = eur(parPersonne[p.cle]); });
@@ -2662,12 +2738,9 @@ function pageLocatif(M, state) {
       const mensualite = Math.max(0, plafond - chargesActuelles);
       const coef = coefMensuel(v.taux, v.duree, v.assurance);
       const capacite = mensualite / coef;
-      const prix = (capacite + v.apport) / (1 + v.notaire / 100);
       const tauxActuel = revenus > 0 ? chargesActuelles / revenus : null;
-      const set = (id, txt) => { document.getElementById(id).innerHTML = txt; };
       set('lr-capacite', eur(Math.round(capacite / 1000) * 1000));
       set('lr-mensualite', eur(mensualite));
-      set('lr-prix', mensualite > 0 ? eur(Math.round(prix / 1000) * 1000) : '—');
       set('lr-revenus', eur(revenus));
       set('lr-taux-actuel', `Endettement actuel : ${pct(tauxActuel)} des revenus`);
       document.getElementById('lr-jauge-actuel').style.width = `${Math.min(1, (tauxActuel || 0) / 0.5) * 100}%`;
@@ -2675,10 +2748,7 @@ function pageLocatif(M, state) {
       document.getElementById('lr-jauge-max').style.left = `${HCSF.endettement / 0.5 * 100}%`;
       set('lr-alerte', !v.salElodie ? '<span class="status warning">● Renseignez le salaire d’Élodie : le crédit actuel est commun, ses revenus comptent.</span>'
         : mensualite <= 0 ? '<span class="status critical">▲ Le crédit actuel atteint déjà le plafond de 35 %.</span>' : '');
-      set('lr-rendement', mensualite > 0 && v.loyer ? pct(v.loyer * 12 / prix) : '—');
-      const cash = v.loyer - mensualite - v.chargesLoc;
-      set('lr-cashflow', v.loyer && mensualite > 0 ? `<span class="${cash < 0 ? 'neg' : 'pos'}">${eurSigned(cash)}</span>` : '—');
-      const lignes = [
+      set('lr-detail', [
         ...PERSONNES.map(p => [`${p.nom} : salaire sur ${v['mois' + p.cle] || 12} mois, ${v['part' + p.cle]} % de la moyenne des primes, autres revenus`, eur(parPersonne[p.cle])]),
         [`Loyer attendu retenu à 70 % (${eur(v.loyer)})`, eur(loyerRetenu)],
         ['<strong>Revenus retenus</strong>', `<strong>${eur(revenus + loyerRetenu)}</strong>`],
@@ -2686,13 +2756,52 @@ function pageLocatif(M, state) {
         ...credits.map(c => [`− ${esc(c.nom)} (mensualité + assurance)`, eur(c.mensualite + c.assurance)]),
         ['<strong>Mensualité possible pour le nouveau crédit</strong>', `<strong>${eur(mensualite)}</strong>`],
         [`Capacité sur ${v.duree} ans à ${nbFr(v.taux)} % + assurance ${nbFr(v.assurance)} %`, `<strong>${eur(capacite)}</strong>`],
-        [`+ apport ${eur(v.apport)}, − frais de notaire ${nbFr(v.notaire)} %`, `prix ${eur(prix)}`],
-      ];
-      set('lr-detail', lignes.map(([a, b]) => `<tr><td>${a}</td><td class="num nowrap">${b}</td></tr>`).join(''));
+      ].map(([a, b]) => `<tr><td>${a}</td><td class="num nowrap">${b}</td></tr>`).join(''));
+
+      // ---- Financement du projet ----
+      const P = projectionLocatif(v);
+      const marge = mensualite - P.mensualite, rentre = P.credit === 0 || marge >= 0;
+      const apportManquant = rentre ? 0 : P.credit - capacite;
+      const endettementApres = revenus + loyerRetenu > 0 ? (chargesActuelles + P.mensualite) / (revenus + loyerRetenu) : null;
+      set('lr-verdict', P.credit === 0 ? '<span class="pos">financé sans crédit</span>'
+        : rentre ? `<span class="pos">✓ rentre dans la capacité</span> <span class="muted">(${eur(marge)} de marge par mois)</span>`
+          : `<span class="neg">▲ dépasse de ${eur(-marge)} par mois</span> <span class="muted">(≈ ${eur(Math.ceil(apportManquant / 1000) * 1000)} d’apport en plus)</span>`);
+      set('lr-financement', [
+        ['Prix d’achat', eur(v.prix)],
+        ['+ travaux et ameublement', eur(v.travaux)],
+        [`+ frais de notaire (${nbFr(v.notaire)} %)`, eur(v.prix * v.notaire / 100)],
+        ['<strong>Coût total</strong>', `<strong>${eur(P.cout)}</strong>`],
+        ['− apport', eur(P.fondsPropres)],
+        ['<strong>Crédit nécessaire</strong>', `<strong>${eur(P.credit)}</strong>`],
+        [`Mensualité sur ${v.duree} ans, assurance comprise`, eur(P.mensualite)],
+        ['Mensualité possible (capacité)', eur(mensualite)],
+        [rentre ? 'Marge restante' : '<span class="neg">Dépassement</span>', rentre ? eur(marge) : `<span class="neg">${eur(-marge)} / mois</span>`],
+        ['Endettement après le projet', `<span class="${endettementApres > HCSF.endettement + 0.0005 ? 'neg' : ''}">${pct(endettementApres)}</span>`],
+      ].map(([a, b]) => `<tr><td>${a}</td><td class="num nowrap">${b}</td></tr>`).join(''));
+
+      // ---- Projection ----
+      const a1 = P.annees[0], H = P.annees.length;
+      const rdtBrut = P.cout ? v.loyer * 12 / P.cout : null;
+      set('lr-tri', P.tri == null ? '—' : `<span class="${P.tri < 0 ? 'neg' : 'pos'}">${pctSigned(P.tri)}</span>`);
+      set('lr-tri-sub', `sur les fonds propres, ${H} ans, avant impôt`);
+      set('lr-kpis-projet', [
+        UI.kpi('Rendement brut', pct(rdtBrut), 'loyers annuels / coût total'),
+        UI.kpi('Cash-flow mensuel, année 1', `<span class="${a1.cashflow < 0 ? 'neg' : 'pos'}">${eurSigned(a1.cashflow / 12)}</span>`, a1.cashflow < 0 ? 'effort d’épargne à prévoir chaque mois' : 'le bien s’autofinance'),
+        UI.kpi(`Cash-flow cumulé sur ${H} ans`, `<span class="${a1 && P.annees[H - 1].cumul < 0 ? 'neg' : 'pos'}">${eurSigned(P.annees[H - 1].cumul)}</span>`, 'hors revente'),
+        UI.kpi(`Revente après ${H} ans`, eur(P.revente), `valeur ${eur(P.annees[H - 1].valeur)} − capital restant dû ${eur(P.annees[H - 1].crd)}`),
+        UI.kpi('Gain total', `<span class="${P.gainTotal < 0 ? 'neg' : 'pos'}">${eurSigned(P.gainTotal)}</span>`, `pour ${eur(P.fondsPropres)} d’apport · TRI ${pctSigned(P.tri)}`),
+      ].join(''));
+      set('lr-annees', `<thead><tr><th>Année</th><th class="num">Loyers encaissés</th><th class="num">Charges</th><th class="num">Échéances</th><th class="num">dont intérêts</th><th class="num">Cash-flow</th><th class="num">Cumul</th><th class="num">Capital restant dû</th><th class="num">Valeur du bien</th></tr></thead>
+        <tbody>${P.annees.map(x => `<tr><td>${x.a}</td><td class="num">${eur(x.loyers)}</td><td class="num">${eur(x.charges)}</td><td class="num">${eur(x.credits)}</td><td class="num muted">${eur(x.interets)}</td>
+          <td class="num ${x.cashflow < 0 ? 'neg' : 'pos'}">${eurSigned(x.cashflow)}</td><td class="num">${eurSigned(x.cumul)}</td><td class="num">${eur(x.crd)}</td><td class="num">${eur(x.valeur)}</td></tr>`).join('')}</tbody>`);
+      if (graphique) { graphique.destroy(); Charts.list = Charts.list.filter(c => c !== graphique); }
+      graphique = Charts.signedBars(document.getElementById('ch-locatif'), P.annees.map(x => `an ${x.a}`), 'Cash-flow', P.annees.map(x => Math.round(x.cashflow)),
+        { tooltip: { label: ctx => ` Cash-flow : ${eurSigned(ctx.parsed.y)} · cumul ${eurSigned(P.annees[ctx.dataIndex].cumul)}` } });
+
+      // ---- Sensibilité de la capacité ----
       const taux = [3.25, 3.5, 3.75, 4], durees = [15, 20, 25];
       set('lr-sensibilite', `<thead><tr><th>Durée</th>${taux.map(t => `<th class="num">${nbFr(t)} %</th>`).join('')}</tr></thead><tbody>${durees.map(d => `<tr><th scope="row">${d} ans</th>${taux.map(t => `<td class="num ${t === v.taux && d === v.duree ? 'strong-cell' : ''}">${eur(Math.round(mensualite / coefMensuel(t, d, v.assurance) / 1000) * 1000)}</td>`).join('')}</tr>`).join('')}</tbody>`);
     };
-    const nbFr = x => x.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
     document.getElementById('form-locatif').addEventListener('input', () => {
       store.set(localStorage, LOCATIF_KEY, JSON.stringify(Object.fromEntries(ids.map(id => [id, document.getElementById('lp-' + id).value]))));
       calculer();
