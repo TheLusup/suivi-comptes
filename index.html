@@ -2312,7 +2312,7 @@ function recommandations(M) {
     const noms = [...new Set(rouges.map(s => compte(s.compte).nom))];
     ajout(recent ? 'haute' : 'moyenne', 'Sécurité', `Éviter les fins de mois à découvert (${rouges.length} en 12 mois)`,
       `${noms.join(', ')} : ${rouges.map(s => `${eur(s.solde)} au ${D.fmt(s.date)}`).join(', ')}. Le compte joint porte l’échéance du prêt, prélevée vers le 27.`,
-      `Garder un coussin d’au moins ${eur(Math.ceil(-pire / 100) * 100 + 200)} sur ${noms.length > 1 ? 'ces comptes' : 'ce compte'}, et caler les virements d’alimentation du compte joint (les vôtres et ceux d’Élodie) avant l’échéance du prêt.`, '#depenses');
+      `Garder un coussin d’au moins ${eur(Math.ceil(-pire / 100) * 100 + 200)} sur ${noms.length > 1 ? 'ces comptes' : 'ce compte'}, et caler les virements d’alimentation du compte joint (les vôtres et ceux du conjoint) avant l’échéance du prêt.`, '#depenses');
   }
 
   // 3. Plus gros postes variables : là où une baisse pèse le plus
@@ -2539,7 +2539,7 @@ function pageRecommandations(M, state) {
    mensualité tient dans la capacité, puis on projette année par année les loyers (revalorisés, nets de la vacance),
    les charges (indexées) et les échéances, jusqu'à la revente à la fin de la détention. Le TRI porte sur les fonds
    propres : l'apport au départ, les cash-flows chaque année, puis le prix de revente moins le capital restant dû.
-   Montants avant impôt. Les hypothèses saisies (dont le salaire d'Élodie) restent dans ce navigateur : elles ne
+   Montants avant impôt. Les hypothèses saisies (dont le salaire du conjoint) restent dans ce navigateur : elles ne
    sont ni dans la page publiée ni dans le dépôt. */
 
 const LOCATIF_KEY = 'suivi-comptes.locatif';
@@ -2565,12 +2565,12 @@ function hypothesesParDefaut(M) {
   const primes = surplus / annees;
   return {
     salMoi: Math.round(med), moisMoi: 12, primesMoi: Math.round(primes / 100) * 100, partMoi: 70, autresMoi: 0,
-    salElodie: '', moisElodie: 12, primesElodie: 0, partElodie: 70, autresElodie: 0,
+    salConjoint: '', moisConjoint: 12, primesConjoint: 0, partConjoint: 70, autresConjoint: 0,
     prix: 150000, travaux: 0, notaire: 8, apport: 20000,
     loyer: 750, vacance: 0.5, chargesLoc: 150, revalLoyer: 1.5, revalCharges: 2, revalBien: 1.5, detention: 20,
     taux: 3.65, duree: 25, assurance: 0.30 };
 }
-const PERSONNES = [{ cle: 'Moi', nom: 'Benjamin' }, { cle: 'Elodie', nom: 'Élodie' }];
+const PERSONNES = [{ cle: 'Moi', nom: 'Benjamin' }, { cle: 'Conjoint', nom: 'Conjoint' }];
 // Revenus mensuels retenus d'une personne : salaire sur n mois ramené au mois, plus la part retenue des primes
 const revenusPersonne = (v, cle) => v['sal' + cle] * (v['mois' + cle] || 12) / 12 + v['primes' + cle] * v['part' + cle] / 100 / 12 + v['autres' + cle];
 
@@ -2731,7 +2731,7 @@ function pageLocatif(M, state) {
       const v = lire();
       // ---- Capacité d'emprunt ----
       const parPersonne = Object.fromEntries(PERSONNES.map(p => [p.cle, revenusPersonne(v, p.cle)]));
-      const revenus = parPersonne.Moi + parPersonne.Elodie;
+      const revenus = parPersonne.Moi + parPersonne.Conjoint;
       PERSONNES.forEach(p => { document.getElementById('lr-rev-' + p.cle).textContent = eur(parPersonne[p.cle]); });
       const loyerRetenu = v.loyer * HCSF.loyerRetenu;
       const plafond = HCSF.endettement * (revenus + loyerRetenu);
@@ -2746,7 +2746,7 @@ function pageLocatif(M, state) {
       document.getElementById('lr-jauge-actuel').style.width = `${Math.min(1, (tauxActuel || 0) / 0.5) * 100}%`;
       document.getElementById('lr-jauge-actuel').classList.toggle('over', (tauxActuel || 0) > HCSF.endettement);
       document.getElementById('lr-jauge-max').style.left = `${HCSF.endettement / 0.5 * 100}%`;
-      set('lr-alerte', !v.salElodie ? '<span class="status warning">● Renseignez le salaire d’Élodie : le crédit actuel est commun, ses revenus comptent.</span>'
+      set('lr-alerte', !v.salConjoint ? '<span class="status warning">● Renseignez le salaire du conjoint : le crédit actuel est commun, ses revenus comptent.</span>'
         : mensualite <= 0 ? '<span class="status critical">▲ Le crédit actuel atteint déjà le plafond de 35 %.</span>' : '');
       set('lr-detail', [
         ...PERSONNES.map(p => [`${p.nom} : salaire sur ${v['mois' + p.cle] || 12} mois, ${v['part' + p.cle]} % de la moyenne des primes, autres revenus`, eur(parPersonne[p.cle])]),
@@ -2807,7 +2807,7 @@ function pageLocatif(M, state) {
       calculer();
     });
     document.getElementById('lp-reset').addEventListener('click', () => {
-      if (!confirm('Revenir aux valeurs par défaut ? Le salaire d’Élodie saisi sera effacé.')) return;
+      if (!confirm('Revenir aux valeurs par défaut ? Le salaire du conjoint saisi sera effacé.')) return;
       store.set(localStorage, LOCATIF_KEY, null); App.render({ garderScroll: true });
     });
     calculer();
