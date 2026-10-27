@@ -196,6 +196,12 @@ tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
 .attention { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: var(--surface-2); border-radius: var(--radius-sm); }
 .attention .status { flex: none; margin-top: 1px; }
 
+/* Abonnements (vue d'ensemble) */
+.abo-total { margin: 0 0 12px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.abo-total .kpi-value { font-size: 26px; }
+table.abos td { vertical-align: top; padding-top: 9px; padding-bottom: 9px; }
+tr.abo-inactif td { opacity: .6; }
+
 /* Recommandations */
 .recos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .reco { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
@@ -621,6 +627,7 @@ function buildModel(raw, source) {
     exceptions: b.exceptions || {},
     exclues: (b.exclues || ['Épargne', 'Virement interne']).map(normKey),
     pnl: b.pnl || null,
+    abonnements: Array.isArray(b.abonnements) ? b.abonnements : [],
   };
 
   const positions = [];
@@ -1348,6 +1355,55 @@ function pointsAttention(M, V) {
       <div><strong>${p.titre}</strong><div class="muted small">${p.texte}</div></div></li>`).join('');
 }
 
+/* ---------- Abonnements ----------
+   Liste déclarée dans budget.json → "abonnements" : { nom, motif (expression régulière cherchée dans le libellé),
+   frequence : mensuel | trimestriel | annuel }. Le dernier prélèvement trouvé donne le montant, le compte et le
+   jour ; l'échéance suivante s'en déduit. Un abonnement qui n'a pas été prélevé à l'échéance attendue alors que
+   les opérations de son compte vont au-delà (15 jours de marge) est signalé « à vérifier » et sorti du total ; un
+   compte dont l'export s'arrête avant l'échéance ne fait pas conclure à un arrêt. Montants du total à votre part. */
+const FREQUENCES = { mensuel: 1, trimestriel: 3, semestriel: 6, annuel: 12 };
+function abonnements(M) {
+  const today = D.today(), parts = new Map(M.comptes.map(c => [c.id, c.quotePart]));
+  const nomCompte = new Map(M.comptes.map(c => [c.id, c.onglet || c.nom]));
+  const finDonnees = new Map();
+  M.transactions.forEach(t => { if (t.date > (finDonnees.get(t.compte) || '')) finDonnees.set(t.compte, t.date); });
+  // Même jour, n mois plus tard (borné à la fin du mois)
+  const plus = (date, n) => { const mk = D.addMonths(D.monthKey(date), n); return `${mk}-${String(Math.min(Number(date.slice(8, 10)), D.daysInMonth(mk))).padStart(2, '0')}`; };
+  return (M.budget.abonnements || []).map(a => {
+    let re; try { re = new RegExp(a.motif || a.nom, 'i'); } catch { re = /$^/; }
+    const ops = M.transactions.filter(t => t.montant < 0 && re.test(t.libelle)).sort((x, y) => x.date.localeCompare(y.date));
+    const mois = FREQUENCES[a.frequence] || 1, der = ops[ops.length - 1];
+    if (!der) return { ...a, mois, aucun: true };
+    let prochaine = plus(der.date, mois);
+    const actif = D.diffDays(prochaine, finDonnees.get(der.compte)) <= 15;
+    // Échéances passées depuis la fin de l'export : on affiche la prochaine à venir
+    for (let k = 2; actif && prochaine < today; k++) prochaine = plus(der.date, mois * k);
+    const part = parts.get(der.compte) ?? 1, montant = -der.montant;
+    return { ...a, mois, montant, part, parMois: montant * part / mois, dernier: der.date, prochaine, actif,
+      compte: nomCompte.get(der.compte) || der.compte, jour: Number(der.date.slice(8, 10)) };
+  }).sort((x, y) => (y.actif === true) - (x.actif === true) || (x.prochaine || '9').localeCompare(y.prochaine || '9'));
+}
+
+function carteAbonnements(M) {
+  const liste = abonnements(M), today = D.today();
+  if (!liste.length) return UI.empty('Déclarez vos abonnements dans budget.json (section « abonnements ») pour les suivre ici.');
+  const actifs = liste.filter(a => a.actif), total = actifs.reduce((s, a) => s + a.parMois, 0);
+  const libFreq = { 1: 'mensuel', 3: 'trimestriel', 6: 'semestriel', 12: 'annuel' };
+  const lignes = liste.map(a => {
+    if (a.aucun) return `<tr class="muted"><td><strong>${esc(a.nom)}</strong><div class="small">aucun prélèvement trouvé</div></td><td></td><td></td></tr>`;
+    const dans = D.diffDays(today, a.prochaine);
+    const quand = !a.actif ? `<span class="status warning">● à vérifier</span><div class="muted small">dernier le ${D.fmt(a.dernier)}</div>`
+      : `${D.fmt(a.prochaine)}<div class="muted small">${dans <= 0 ? 'attendu' : dans === 1 ? 'demain' : `dans ${dans} j`}</div>`;
+    return `<tr class="${a.actif ? '' : 'abo-inactif'}">
+      <td><strong>${esc(a.nom)}</strong><div class="muted small">${libFreq[a.mois] || ''} · le ${a.jour} · ${esc(a.compte)}${a.part < 1 ? ` · votre part ${pct(a.part)}` : ''}</div></td>
+      <td class="num nowrap">${eur(a.montant, true)}${a.mois > 1 ? `<div class="muted small">${eur(a.montant / a.mois, true)}/mois</div>` : ''}</td>
+      <td class="num nowrap">${quand}</td></tr>`;
+  }).join('');
+  return `<div class="abo-total"><span class="kpi-value">${eur(total)}</span> <span class="muted">par mois à votre part · ${actifs.length} abonnement${actifs.length > 1 ? 's' : ''} actif${actifs.length > 1 ? 's' : ''} · ${eur(total * 12)} par an</span></div>
+    <div class="table-wrap"><table class="abos"><thead><tr><th>Abonnement</th><th class="num">Montant</th><th class="num">Prochaine échéance</th></tr></thead><tbody>${lignes}</tbody></table></div>
+    <p class="small muted">D’après le dernier prélèvement de chaque abonnement ; la liste se règle dans budget.json (section « abonnements »).</p>`;
+}
+
 /* ---------- Vue d'ensemble ---------- */
 function pageOverview(M) {
   const today = D.today(), cm = F.moisCourant();
@@ -1380,10 +1436,6 @@ function pageOverview(M) {
       <td class="num ${age > 40 ? 'stale' : 'muted'}">${maj ? D.fmt(maj) : '—'}${age > 40 ? ' <span title="Solde non mis à jour depuis plus de 40 jours">⚠</span>' : ''}</td>
     </tr>`;
   }).join('');
-
-  const last = M.transactions.slice(-8).reverse().map(t => `
-    <tr><td class="muted">${D.fmt(t.date)}</td><td>${esc(t.libelle)}<div class="muted small">${esc(t.categorie)}</div></td>
-    <td class="num ${t.montant > 0 ? 'pos' : ''}">${eurSigned(t.montant, true)}</td></tr>`).join('');
 
   const html = `
     <div class="page-h"><h1>Vue d'ensemble</h1><p class="muted">Situation au ${D.fmt(today)}</p></div>
@@ -1425,7 +1477,7 @@ function pageOverview(M) {
         <tbody>${comptesRows}</tbody>
         <tfoot><tr><td colspan="2">Total</td><td class="num">${eur(now.net, true)}</td><td></td></tr></tfoot></table></div>`, { cls: 'span-7' })}
 
-      ${UI.card('Dernières opérations', last ? `<div class="table-wrap"><table><tbody>${last}</tbody></table></div>` : UI.empty('Aucune opération.'), { cls: 'span-5' })}
+      ${UI.card('Mes abonnements', carteAbonnements(M), { sub: 'Prélèvements récurrents et prochaine échéance', cls: 'span-5' })}
     </div>`;
 
   return { html, after() {
