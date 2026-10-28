@@ -2605,7 +2605,7 @@ function hypothesesPrevision(M) {
   const max = sal.reduce((a, t) => (!a || t.montant > a.montant ? t : a), null);
   const credits = (M.immobilier || []).filter(b => b.pret).reduce((s, b) => s + (parseNum(b.pret.mensualite) || 0) * Immo.part(b), 0);
   return {
-    salaire: loc.salMoi, primes: loc.primesMoi, moisPrimes: max ? Number(max.date.slice(5, 7)) : 12, autres: 0, hausseSalaire: 2,
+    salaire: loc.salMoi, primes: loc.primesMoi, moisPrimes: max ? Number(max.date.slice(5, 7)) : 12, primeProchaine: '', autres: 0, hausseSalaire: 2,
     depenses: Math.round(depenses / 10) * 10, inflation: 2,
     cible: Math.max(1000, Math.round(6 * (depenses + credits) / 1000) * 1000), partPlacee: 50,
     rdtEpargne: 2, rdtPlacements: 5, rdtImmo: 1.5, horizon: 20,
@@ -2634,10 +2634,13 @@ function projectionPrevision(M, v, ecarts = SCENARIOS.central) {
   const p = F.pnl(vueDepenses(M, ''), cm);
   const dejaRecu = p.revenus, dejaDepense = p.charges + (p.parCat.get(normKey(CAT_INTERETS)) || 0);
   const an0 = Number(cm.slice(0, 4)), lignes = [];
+  // Prochaine prime : montant saisi s'il y en a un, sinon la moyenne annuelle
+  const prochaine = moisProchainePrime(v.moisPrimes), primeSaisie = parseNum(v.primeProchaine);
   D.range(cm, `${an0 + v.horizon}-12`).forEach((mk, i) => {
     const ans = Number(mk.slice(0, 4)) - an0;
     const kRev = Math.pow(1 + v.hausseSalaire / 100, ans), kDep = Math.pow(1 + v.inflation / 100, ans);
-    let revenus = (v.salaire + v.autres + (Number(mk.slice(5, 7)) === v.moisPrimes ? v.primes : 0)) * kRev;
+    const prime = Number(mk.slice(5, 7)) !== v.moisPrimes ? 0 : mk === prochaine && primeSaisie != null ? primeSaisie : v.primes * kRev;
+    let revenus = (v.salaire + v.autres) * kRev + prime;
     let depenses = v.depenses * kDep;
     if (i === 0) { revenus = Math.max(0, revenus - dejaRecu); depenses = Math.max(0, depenses - dejaDepense); }
     const e = echeances.get(mk), dueEnsuite = e && (i > 0 || e.date > today);
@@ -2665,6 +2668,13 @@ function projectionPrevision(M, v, ecarts = SCENARIOS.central) {
   });
   return { net0: P0.net, lignes };
 }
+
+// Mois (AAAA-MM) de la prochaine prime : celui de l'année en cours s'il n'est pas passé, sinon l'an prochain
+function moisProchainePrime(moisPrimes) {
+  const cm = F.moisCourant(), an = Number(cm.slice(0, 4)), mk = `${an}-${pad(Number(moisPrimes) || 12)}`;
+  return mk >= cm ? mk : `${an + 1}-${mk.slice(5)}`;
+}
+const libelleMois = mk => `${NOMS_MOIS[Number(mk.slice(5, 7)) - 1]} ${mk.slice(0, 4)}`;
 
 // Somme d'un champ sur des lignes
 const somme = (l, k) => l.reduce((s, x) => s + x[k], 0);
@@ -2709,6 +2719,7 @@ function pagePrevisionnel(M, state) {
           ${champ('autres', 'Autres revenus mensuels', 'Aides, loyers perçus…')}
         </div>
         <div class="form-row">
+          <label><span id="pv-lib-primeProchaine">Prime de ${libelleMois(moisProchainePrime(h.moisPrimes))}</span><span class="champ-unite"><input type="number" inputmode="decimal" min="0" step="100" id="pv-primeProchaine" value="${esc(h.primeProchaine)}" placeholder="${esc(h.primes)}"><span>€</span></span><span class="muted small">Si vous la connaissez ; vide = la moyenne ci-dessus.</span></label>
           ${champ('hausseSalaire', 'Hausse annuelle des revenus', 'Appliquée chaque janvier.', { pas: 0.25, unite: '%', min: null })}
         </div>
         <h3 class="cats-titre">Dépenses</h3>
@@ -2759,7 +2770,7 @@ function pagePrevisionnel(M, state) {
     const ids = Object.keys(defaut), textes = id => /^ev(Mois|Lib)/.test(id);
     const lire = () => Object.fromEntries(ids.map(id => {
       const x = document.getElementById('pv-' + id).value;
-      return [id, textes(id) ? x : id.startsWith('evMontant') ? x : parseNum(x) ?? 0];
+      return [id, textes(id) || id.startsWith('evMontant') || id === 'primeProchaine' ? x : parseNum(x) ?? 0];
     }));
     const set = (id, txt) => { document.getElementById(id).innerHTML = txt; };
     const cm = F.moisCourant(), an0 = Number(cm.slice(0, 4));
@@ -2769,12 +2780,14 @@ function pagePrevisionnel(M, state) {
     const calculer = () => {
       const v = lire();
       v.horizon = Math.max(1, Math.min(40, Math.round(v.horizon) || 1));
+      set('pv-lib-primeProchaine', `Prime de ${libelleMois(moisProchainePrime(v.moisPrimes))}`);
+      document.getElementById('pv-primeProchaine').placeholder = v.primes;
       const R = Object.fromEntries(Object.entries(SCENARIOS).map(([k, e]) => [k, projectionPrevision(M, v, e)]));
       const L = R.central.lignes, net0 = R.central.net0;
       // ---- 12 mois : le reste du mois en cours puis 12 mois ----
       const douze = L.slice(0, 13), fin12 = douze[douze.length - 1];
       const ep12 = somme(douze, 'epargne'), cap12 = somme(douze, 'capital'), rdt12 = somme(douze, 'rendements'), val12 = somme(douze, 'valorisation');
-      set('pv-titre-12', `Patrimoine net fin ${NOMS_MOIS[Number(fin12.mk.slice(5, 7)) - 1]} ${fin12.mk.slice(0, 4)}`);
+      set('pv-titre-12', `Patrimoine net fin ${libelleMois(fin12.mk)}`);
       set('pv-net-12', eur(fin12.net));
       set('pv-delta-12', `${UI.delta(fin12.net - net0, net0)} <span class="muted">vs aujourd’hui (${eur(net0)})</span>`);
       set('pv-detail-12', `<span class="muted">Épargne</span> <strong>${eurSigned(ep12)}</strong> <span class="muted">dont capital du crédit ${eur(cap12)} · rendements</span> <strong>${eurSigned(rdt12)}</strong> <span class="muted">· immobilier</span> <strong>${eurSigned(val12)}</strong>`);
