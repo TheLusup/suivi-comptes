@@ -190,6 +190,14 @@ tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
   .duo-lib .small, .duo .champ-unite span { display: none; }
   .duo input { padding-left: 10px; padding-right: 6px; }
 }
+/* Prévisionnel */
+.prev-evts { display: grid; gap: 8px; }
+.prev-evt { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr); gap: 8px; align-items: center; }
+@media (max-width: 760px) {
+  .prev-evt { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .prev-evt > :nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .prev-evt.muted > :nth-child(2) { display: none; }
+}
 .champ-unite { display: flex; align-items: center; gap: 8px; }
 .champ-unite input { flex: 1; min-width: 0; }
 .champ-unite span { color: var(--text-2); font-size: 13px; min-width: 22px; }
@@ -414,6 +422,10 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
       <a href="#immobilier" data-route="immobilier">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V8.5L11 4v17zM13 21V9h7v12zM6.5 10h2v2h-2zm0 4h2v2h-2zm9-2h2v2h-2zm0 4h2v2h-2z"/></svg>
         <span>Immobilier</span>
+      </a>
+      <a href="#previsionnel" data-route="previsionnel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 16.6 9 10.1l4 4 5.6-5.6h-3.1v-2h6.5V13h-2V9.9l-7 7-4-4-5.1 5.1zM3 19.5h18v2H3z"/></svg>
+        <span>Prévisionnel</span>
       </a>
       <a href="#locatif" data-route="locatif">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 7a4.5 4.5 0 1 1 3.6 4.4L10 13.5H8v2H6v2H3v-3l5.6-5.6A4.5 4.5 0 0 1 8.5 7zm4.5-1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM13 15h8v6h-8z"/></svg>
@@ -2558,6 +2570,273 @@ function pageRecommandations(M, state) {
   <script>
 'use strict';
 
+/* ---------- Prévisionnel : patrimoine net projeté mois par mois ----------
+   Départ : le patrimoine net d'aujourd'hui (même calcul que la vue d'ensemble), réparti entre liquidités, épargne
+   (livrets, fonds monétaire), placements et immobilier (votre quote-part de la valeur et du capital restant dû).
+   Chaque mois : revenus (salaire, primes le mois habituel, autres revenus) − dépenses courantes hors crédit − votre part
+   de l'échéance du prêt (intérêts, assurance, capital, d'après le tableau d'amortissement) ± événements ponctuels.
+   Ce qui reste va en placements à hauteur de la part choisie, le reste en épargne de précaution jusqu'à la cible ;
+   la cible atteinte, tout va en placements. Un mois négatif puise dans les liquidités, puis l'épargne, puis les
+   placements. Le capital remboursé réduit la dette ; chaque poche rapporte son rendement, le bien se valorise.
+   Revenus et dépenses augmentent chaque janvier. Le mois en cours n'est projeté que pour ce qui reste à venir.
+   Fourchette : rendement des placements ± 2 points et valorisation de l'immobilier ± 1 point.
+   Montants à votre part (compte joint et bien à 50 %), revenus nets d'impôt (virements reçus). Les hypothèses
+   saisies restent dans ce navigateur : elles ne sont ni dans la page publiée ni dans le dépôt. */
+
+const PREVISION_KEY = 'suivi-comptes.previsionnel';
+const NB_EVENEMENTS = 3;
+const NOMS_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const SCENARIOS = { prudent: { placements: -2, immo: -1 }, central: { placements: 0, immo: 0 }, favorable: { placements: 2, immo: 1 } };
+const CAT_INTERETS = 'Intérêts du crédit immobilier';
+
+// Valeurs proposées par défaut, tirées des données
+function hypothesesPrevision(M) {
+  const V = vueDepenses(M, ''), cm = F.moisCourant(), loc = hypothesesParDefaut(M);
+  // Dépenses courantes hors crédit : moyenne des 12 derniers mois complets, sans remonter avant le mois qui suit
+  // le dernier achat immobilier (les mois d'avant comptaient un loyer)
+  const achat = (M.immobilier || []).map(b => D.monthKey(b.dateAchat)).sort().pop();
+  let debut = D.addMonths(cm, -12);
+  if (achat && D.addMonths(achat, 1) > debut) debut = D.addMonths(achat, 1);
+  const mois = debut < cm ? D.range(debut, D.addMonths(cm, -1)) : [];
+  const horsCredit = mk => { const p = F.pnl(V, mk); return p.charges + (p.parCat.get(normKey(CAT_INTERETS)) || 0); };
+  const depenses = mois.length ? mois.reduce((s, mk) => s + horsCredit(mk), 0) / mois.length : F.budgetTotal(V, cm);
+  // Mois des primes : celui du plus gros virement de salaire des 3 dernières années
+  const sal = M.transactions.filter(t => t.montant > 0 && normKey(t.categorie) === normKey('Salaire') && t.date >= D.addMonths(cm, -36) + '-01');
+  const max = sal.reduce((a, t) => (!a || t.montant > a.montant ? t : a), null);
+  const credits = (M.immobilier || []).filter(b => b.pret).reduce((s, b) => s + (parseNum(b.pret.mensualite) || 0) * Immo.part(b), 0);
+  return {
+    salaire: loc.salMoi, primes: loc.primesMoi, moisPrimes: max ? Number(max.date.slice(5, 7)) : 12, autres: 0, hausseSalaire: 2,
+    depenses: Math.round(depenses / 10) * 10, inflation: 2,
+    cible: Math.max(1000, Math.round(6 * (depenses + credits) / 1000) * 1000), partPlacee: 50,
+    rdtEpargne: 2, rdtPlacements: 5, rdtImmo: 1.5, horizon: 20,
+    ...Object.fromEntries(Array.from({ length: NB_EVENEMENTS }, (_, i) => [[`evMois${i}`, ''], [`evLib${i}`, ''], [`evMontant${i}`, '']]).flat()),
+  };
+}
+
+// Projection du mois en cours jusqu'à décembre de l'année de l'horizon ; ecarts = points ajoutés aux rendements
+function projectionPrevision(M, v, ecarts = SCENARIOS.central) {
+  const today = D.today(), cm = F.moisCourant(), P0 = F.patrimoine(M, today);
+  const biens = (M.immobilier || []).map(b => ({ b, q: Immo.part(b), valeur: Immo.valeur(b, today) * Immo.part(b) }));
+  const crd0 = biens.reduce((s, x) => s + Immo.crd(x.b, today) * x.q, 0);
+  let ep = P0.par.epargne, pl = P0.par.placements;
+  let liq = P0.net - ep - pl - biens.reduce((s, x) => s + x.valeur, 0) + crd0;   // liquidités, autres actifs et autres dettes
+  // Échéances du prêt par mois, à votre part
+  const echeances = new Map();
+  biens.forEach(x => x.b.echeancier.forEach(e => {
+    const mk = D.monthKey(e.date), a = echeances.get(mk) || { date: e.date, interets: 0, assurance: 0, capital: 0 };
+    a.interets += e.interets * x.q; a.assurance += e.assurance * x.q; a.capital += e.capital * x.q;
+    echeances.set(mk, a);
+  }));
+  const mensuel = t => Math.pow(1 + t / 100, 1 / 12) - 1;
+  const rEp = mensuel(v.rdtEpargne), rPl = mensuel(v.rdtPlacements + ecarts.placements), rIm = mensuel(v.rdtImmo + ecarts.immo);
+  const evenements = Array.from({ length: NB_EVENEMENTS }, (_, i) => ({ mois: v[`evMois${i}`], montant: parseNum(v[`evMontant${i}`]) || 0 })).filter(e => e.mois && e.montant);
+  // Déjà reçu et déjà dépensé ce mois-ci : seul le reste du mois en cours est projeté
+  const p = F.pnl(vueDepenses(M, ''), cm);
+  const dejaRecu = p.revenus, dejaDepense = p.charges + (p.parCat.get(normKey(CAT_INTERETS)) || 0);
+  const an0 = Number(cm.slice(0, 4)), lignes = [];
+  D.range(cm, `${an0 + v.horizon}-12`).forEach((mk, i) => {
+    const ans = Number(mk.slice(0, 4)) - an0;
+    const kRev = Math.pow(1 + v.hausseSalaire / 100, ans), kDep = Math.pow(1 + v.inflation / 100, ans);
+    let revenus = (v.salaire + v.autres + (Number(mk.slice(5, 7)) === v.moisPrimes ? v.primes : 0)) * kRev;
+    let depenses = v.depenses * kDep;
+    if (i === 0) { revenus = Math.max(0, revenus - dejaRecu); depenses = Math.max(0, depenses - dejaDepense); }
+    const e = echeances.get(mk), dueEnsuite = e && (i > 0 || e.date > today);
+    const interets = dueEnsuite ? e.interets : 0, assurance = dueEnsuite ? e.assurance : 0, capital = dueEnsuite ? e.capital : 0;
+    const evts = evenements.filter(x => x.mois === mk).reduce((s, x) => s + x.montant, 0);
+    // Épargne du mois, capital du crédit compris (il réduit la dette) ; le reste est disponible pour vos comptes
+    const epargne = revenus - depenses - interets - assurance + evts, disponible = epargne - capital;
+    // Rendements sur les soldes de début de mois (le mois en cours au prorata des jours restants)
+    const prorata = i === 0 ? (D.daysInMonth(mk) - Number(today.slice(8, 10))) / D.daysInMonth(mk) : 1;
+    const gEp = ep * rEp * prorata, gPl = pl * rPl * prorata;
+    ep += gEp; pl += gPl;
+    let valorisation = 0;
+    biens.forEach(x => { const g = x.valeur * rIm * prorata; x.valeur += g; valorisation += g; });
+    if (disponible >= 0) {
+      const versPrecaution = Math.min(Math.max(0, v.cible - ep), disponible * (1 - v.partPlacee / 100));
+      ep += versPrecaution; pl += disponible - versPrecaution;
+    } else {
+      let manque = -disponible;
+      const puiser = solde => { const x = Math.min(Math.max(0, solde), manque); manque -= x; return x; };
+      liq -= puiser(liq); ep -= puiser(ep); pl -= puiser(pl); liq -= manque;
+    }
+    const immo = biens.reduce((s, x) => s + x.valeur, 0), crd = biens.reduce((s, x) => s + Immo.crd(x.b, D.endOfMonth(mk)) * x.q, 0);
+    lignes.push({ mk, revenus, depenses, interets, assurance, capital, evts, epargne, rendements: gEp + gPl, valorisation,
+      liq, ep, pl, immo, crd, net: liq + ep + pl + immo - crd });
+  });
+  return { net0: P0.net, lignes };
+}
+
+// Somme d'un champ sur des lignes
+const somme = (l, k) => l.reduce((s, x) => s + x[k], 0);
+
+function pagePrevisionnel(M, state) {
+  let saisies = {};
+  try { saisies = JSON.parse(store.get(localStorage, PREVISION_KEY) || '{}'); } catch { saisies = {}; }
+  const defaut = hypothesesPrevision(M), h = { ...defaut, ...saisies };
+  const credits = (M.immobilier || []).filter(b => b.pret);
+  const champ = (id, label, aide, { pas = 1, unite = '€', min = 0 } = {}) => `
+    <label>${label}<span class="champ-unite"><input type="number" inputmode="decimal" ${min == null ? '' : `min="${min}"`} step="${pas}" id="pv-${id}" value="${esc(h[id])}"><span>${unite}</span></span>${aide ? `<span class="muted small">${aide}</span>` : ''}</label>`;
+
+  const html = `
+    <div class="page-h"><h1>Prévisionnel</h1><p class="muted">Votre patrimoine net projeté sur les 12 prochains mois et à long terme, selon vos hypothèses</p></div>
+    <div class="grid">
+      <section class="card epargne-hero span-12" style="--hero-tint: color-mix(in srgb, var(--series-2) 22%, transparent)">
+        <div>
+          <div class="kpi-label" id="pv-titre-12">Patrimoine net dans 12 mois</div>
+          <div class="hero-value" id="pv-net-12">—</div>
+          <div class="hero-deltas">
+            <div id="pv-delta-12"></div>
+            <div id="pv-detail-12" class="small"></div>
+            <div id="pv-fourchette-12" class="small muted"></div>
+          </div>
+        </div>
+        <div class="kpis hero-kpis locatif-kpis" id="pv-kpis"></div>
+      </section>
+
+      ${UI.card('Les 12 prochains mois', `${UI.chart('ch-prev-12', 260)}
+        <div class="table-wrap"><table id="pv-mois"></table></div>
+        <p class="small muted">Épargne du mois = revenus − dépenses courantes − intérêts et assurance du crédit ± événements ; elle comprend le capital du crédit remboursé, qui réduit la dette. Le mois en cours ne compte que ce qui reste à venir.</p>`,
+        { sub: 'Réalisé sur 12 mois, puis prévision (pointillés)', cls: 'span-12' })}
+
+      ${UI.card('Vos hypothèses', `<form class="form" id="form-prevision" onsubmit="return false">
+        <h3 class="cats-titre">Revenus, nets d’impôt</h3>
+        <div class="form-row">
+          ${champ('salaire', 'Salaire mensuel net', 'Montant viré chaque mois, après prélèvement à la source.')}
+          ${champ('primes', 'Primes annuelles', 'Moyenne des dernières années, nette.', { pas: 100 })}
+        </div>
+        <div class="form-row">
+          <label>Mois de versement des primes<select id="pv-moisPrimes">${NOMS_MOIS.map((n, i) => `<option value="${i + 1}" ${Number(h.moisPrimes) === i + 1 ? 'selected' : ''}>${n}</option>`).join('')}</select><span class="muted small">D’après votre plus gros virement de salaire.</span></label>
+          ${champ('autres', 'Autres revenus mensuels', 'Aides, loyers perçus…')}
+        </div>
+        <div class="form-row">
+          ${champ('hausseSalaire', 'Hausse annuelle des revenus', 'Appliquée chaque janvier.', { pas: 0.25, unite: '%', min: null })}
+        </div>
+        <h3 class="cats-titre">Dépenses</h3>
+        <div class="form-row">
+          ${champ('depenses', 'Dépenses courantes par mois', `Hors crédit immobilier ; moyenne de vos derniers mois : ${eur(defaut.depenses)}.`, { pas: 10 })}
+          ${champ('inflation', 'Hausse annuelle des dépenses', 'Inflation, appliquée chaque janvier.', { pas: 0.25, unite: '%', min: null })}
+        </div>
+        <p class="small muted">${credits.length ? `Crédit immobilier repris du tableau d’amortissement : ${credits.map(b => `${esc(b.pret.nom || b.nom)}, votre part ${eur((parseNum(b.pret.mensualite) || 0) * Immo.part(b))} par mois hors assurance, jusqu’en ${D.monthLabel(D.monthKey(b.echeancier[b.echeancier.length - 1]?.date || b.dateAchat))}`).join(' ; ')}. Les intérêts et l’assurance sont des dépenses, le capital de l’épargne.` : 'Aucun crédit immobilier renseigné.'}</p>
+        <h3 class="cats-titre">Épargne</h3>
+        <div class="form-row">
+          ${champ('cible', 'Épargne de précaution visée', 'Livrets et fonds monétaire ; environ 6 mois de dépenses.', { pas: 1000 })}
+          ${champ('partPlacee', 'Part placée tant que la cible n’est pas atteinte', 'Le reste va en épargne de précaution ; ensuite, tout est placé.', { pas: 5, unite: '%' })}
+        </div>
+        <h3 class="cats-titre">Rendements annuels</h3>
+        <div class="form-row">
+          ${champ('rdtEpargne', 'Livrets et fonds monétaire', 'Net, par an.', { pas: 0.25, unite: '%', min: null })}
+          ${champ('rdtPlacements', 'Placements', 'PEA, assurance vie, PER, PEE, pension ; net de frais, par an.', { pas: 0.25, unite: '%', min: null })}
+        </div>
+        <div class="form-row">
+          ${champ('rdtImmo', 'Valorisation de l’immobilier', 'Par an.', { pas: 0.25, unite: '%', min: null })}
+          ${champ('horizon', 'Horizon du long terme', 'Jusqu’à décembre de l’année visée.', { unite: 'ans' })}
+        </div>
+        <h3 class="cats-titre">Événements ponctuels</h3>
+        <div class="prev-evts">
+          <div class="prev-evt muted small"><span>Mois</span><span>Libellé</span><span>Montant</span></div>
+          ${Array.from({ length: NB_EVENEMENTS }, (_, i) => `<div class="prev-evt">
+            <input type="month" id="pv-evMois${i}" value="${esc(h['evMois' + i])}" aria-label="Mois de l’événement ${i + 1}">
+            <input type="text" id="pv-evLib${i}" value="${esc(h['evLib' + i])}" placeholder="ex. voiture, mariage" aria-label="Libellé de l’événement ${i + 1}">
+            <span class="champ-unite"><input type="number" inputmode="decimal" step="100" id="pv-evMontant${i}" value="${esc(h['evMontant' + i])}" aria-label="Montant de l’événement ${i + 1}"><span>€</span></span>
+          </div>`).join('')}
+          <span class="muted small">Montant négatif pour une dépense, positif pour une rentrée (héritage, vente…).</span>
+        </div>
+        <div class="row-between"><span class="small muted">Vos saisies restent dans ce navigateur.</span><button type="button" class="btn small ghost" id="pv-reset">Valeurs par défaut</button></div>
+      </form>`, { sub: 'Modifiez les chiffres : tout se recalcule', cls: 'span-5' })}
+
+      <div class="span-7 colonne">
+        ${UI.card('À long terme', `${UI.chart('ch-prev-lt', 280)}`, { sub: 'Patrimoine net en fin d’année, par poche (scénario central)' })}
+        ${UI.card('Fourchette', `<div class="table-wrap"><table id="pv-fourchette"></table></div>
+          <p class="small muted">Prudent : placements à −2 points et immobilier à −1 point par rapport à vos hypothèses ; favorable : +2 et +1 point.</p>`, { sub: 'Patrimoine net en fin d’année selon les rendements' })}
+      </div>
+
+      ${UI.repli('prevision-annees', 'Le détail année par année', `<div class="table-wrap"><table id="pv-annees"></table></div>`, { sub: 'Revenus, dépenses, crédit, épargne, rendements et patrimoine net (scénario central)', state })}
+    </div>
+    <p class="small muted">Projection indicative : elle prolonge vos hypothèses et ne prédit ni les marchés, ni les taux, ni l’évolution de vos revenus. Je ne suis pas conseiller financier agréé.</p>`;
+
+  return { html, after() {
+    UI.suivreReplis(state);
+    const ids = Object.keys(defaut), textes = id => /^ev(Mois|Lib)/.test(id);
+    const lire = () => Object.fromEntries(ids.map(id => {
+      const x = document.getElementById('pv-' + id).value;
+      return [id, textes(id) ? x : id.startsWith('evMontant') ? x : parseNum(x) ?? 0];
+    }));
+    const set = (id, txt) => { document.getElementById(id).innerHTML = txt; };
+    const cm = F.moisCourant(), an0 = Number(cm.slice(0, 4));
+    // Patrimoine net réalisé des 12 derniers mois (fin de mois), pour le graphique
+    const passe = D.range(D.addMonths(cm, -12), D.addMonths(cm, -1)).map(mk => ({ mk, net: F.patrimoine(M, F.dateFin(mk)).net }));
+    let graphiques = [];
+    const calculer = () => {
+      const v = lire();
+      v.horizon = Math.max(1, Math.min(40, Math.round(v.horizon) || 1));
+      const R = Object.fromEntries(Object.entries(SCENARIOS).map(([k, e]) => [k, projectionPrevision(M, v, e)]));
+      const L = R.central.lignes, net0 = R.central.net0;
+      // ---- 12 mois : le reste du mois en cours puis 12 mois ----
+      const douze = L.slice(0, 13), fin12 = douze[douze.length - 1];
+      const ep12 = somme(douze, 'epargne'), cap12 = somme(douze, 'capital'), rdt12 = somme(douze, 'rendements'), val12 = somme(douze, 'valorisation');
+      set('pv-titre-12', `Patrimoine net fin ${NOMS_MOIS[Number(fin12.mk.slice(5, 7)) - 1]} ${fin12.mk.slice(0, 4)}`);
+      set('pv-net-12', eur(fin12.net));
+      set('pv-delta-12', `${UI.delta(fin12.net - net0, net0)} <span class="muted">vs aujourd’hui (${eur(net0)})</span>`);
+      set('pv-detail-12', `<span class="muted">Épargne</span> <strong>${eurSigned(ep12)}</strong> <span class="muted">dont capital du crédit ${eur(cap12)} · rendements</span> <strong>${eurSigned(rdt12)}</strong> <span class="muted">· immobilier</span> <strong>${eurSigned(val12)}</strong>`);
+      set('pv-fourchette-12', `Fourchette : ${eur(R.prudent.lignes[douze.length - 1].net)} à ${eur(R.favorable.lignes[douze.length - 1].net)}`);
+      // ---- Fins d'année ----
+      const finAn = r => r.lignes.filter(x => x.mk.endsWith('-12'));
+      const annees = finAn(R.central), parAn = new Map(annees.map((x, i) => [Number(x.mk.slice(0, 4)), i]));
+      const jalon = n => { const a = an0 + n, i = parAn.get(a); return i == null ? null : { a, c: annees[i], p: finAn(R.prudent)[i], f: finAn(R.favorable)[i] }; };
+      set('pv-kpis', [5, 10, v.horizon].filter((n, i, t) => n <= v.horizon && t.indexOf(n) === i).map(n => {
+        const j = jalon(n);
+        return UI.kpi(`Fin ${j.a}`, eur(j.c.net), `${eur(j.p.net)} à ${eur(j.f.net)} selon les rendements`);
+      }).join(''));
+      const jalons = [...new Set([0, 1, 2, 3, 5, 10, 15, 20, 25, 30, 40, v.horizon])].filter(n => n <= v.horizon).sort((a, b) => a - b).map(jalon).filter(Boolean);
+      set('pv-fourchette', `<thead><tr><th>Fin d’année</th><th class="num">Prudent</th><th class="num">Central</th><th class="num">Favorable</th></tr></thead>
+        <tbody>${jalons.map(j => `<tr><td>${j.a}</td><td class="num">${eur(j.p.net)}</td><td class="num strong-cell">${eur(j.c.net)}</td><td class="num">${eur(j.f.net)}</td></tr>`).join('')}</tbody>`);
+      // ---- Tableau des 12 mois ----
+      const avecEvts = douze.some(x => x.evts);
+      set('pv-mois', `<thead><tr><th>Mois</th><th class="num">Revenus</th><th class="num">Dépenses courantes</th><th class="num">Intérêts et assurance</th>${avecEvts ? '<th class="num">Événements</th>' : ''}<th class="num">Épargne du mois</th><th class="num">Rendements</th><th class="num">Patrimoine net</th></tr></thead>
+        <tbody>${douze.map((x, i) => `<tr><td class="nowrap">${D.monthLabel(x.mk)}${i === 0 ? ' <span class="muted small">(reste)</span>' : ''}</td><td class="num">${eur(x.revenus)}</td><td class="num">${eur(x.depenses)}</td><td class="num">${eur(x.interets + x.assurance)}</td>
+          ${avecEvts ? `<td class="num">${x.evts ? eurSigned(x.evts) : ''}</td>` : ''}<td class="num ${x.epargne < 0 ? 'neg' : 'pos'}">${eurSigned(x.epargne)}${x.capital ? `<span class="muted small"> dont ${eur(x.capital)} de capital</span>` : ''}</td>
+          <td class="num">${eurSigned(x.rendements + x.valorisation)}</td><td class="num"><strong>${eur(x.net)}</strong></td></tr>`).join('')}</tbody>`);
+      // ---- Détail par année ----
+      const parAnnee = [...new Set(L.map(x => x.mk.slice(0, 4)))].map(a => {
+        const l = L.filter(x => x.mk.startsWith(a)), d = l[l.length - 1];
+        return { a, l, d, partiel: a === String(an0) };
+      });
+      set('pv-annees', `<thead><tr><th>Année</th><th class="num">Revenus</th><th class="num">Dépenses courantes</th><th class="num">Intérêts et assurance</th><th class="num">Épargne</th><th class="num">dont capital du crédit</th><th class="num">Rendements</th><th class="num">Immobilier</th><th class="num">Capital restant dû</th><th class="num">Patrimoine net</th></tr></thead>
+        <tbody>${parAnnee.map(({ a, l, d, partiel }) => `<tr><td class="nowrap">${a}${partiel ? ' <span class="muted small">(reste)</span>' : ''}</td><td class="num">${eur(somme(l, 'revenus'))}</td><td class="num">${eur(somme(l, 'depenses'))}</td>
+          <td class="num">${eur(somme(l, 'interets') + somme(l, 'assurance'))}</td><td class="num ${somme(l, 'epargne') < 0 ? 'neg' : ''}">${eurSigned(somme(l, 'epargne'))}</td><td class="num muted">${eur(somme(l, 'capital'))}</td>
+          <td class="num">${eurSigned(somme(l, 'rendements'))}</td><td class="num">${eurSigned(somme(l, 'valorisation'))}</td><td class="num">${eur(d.crd)}</td><td class="num"><strong>${eur(d.net)}</strong></td></tr>`).join('')}</tbody>`);
+      // ---- Graphiques ----
+      graphiques.forEach(g => { if (g) { g.destroy(); Charts.list = Charts.list.filter(c => c !== g); } });
+      const labels = [...passe.map(x => x.mk), cm, ...douze.slice(1).map(x => x.mk)].map(mk => D.monthLabel(mk));
+      const vide = n => Array(n).fill(null);
+      graphiques = [
+        Charts.line(document.getElementById('ch-prev-12'), labels, [
+          { label: 'Réalisé', data: [...passe.map(x => Math.round(x.net)), Math.round(net0), ...vide(douze.length - 1)] },
+          { label: 'Prévision', data: [...vide(passe.length), Math.round(net0), ...douze.slice(1).map(x => Math.round(x.net))], dash: [6, 4] },
+        ]),
+        Charts.line(document.getElementById('ch-prev-lt'), annees.map(x => x.mk.slice(0, 4)), [
+          { label: 'Liquidités et épargne', data: annees.map(x => Math.round(x.liq + x.ep)) },
+          { label: 'Placements', data: annees.map(x => Math.round(x.pl)) },
+          ...(annees.some(x => x.immo) ? [{ label: 'Immobilier (net du crédit)', data: annees.map(x => Math.round(x.immo - x.crd)) }] : []),
+        ], { stacked: true, area: true }),
+      ];
+    };
+    document.getElementById('form-prevision').addEventListener('input', () => {
+      store.set(localStorage, PREVISION_KEY, JSON.stringify(Object.fromEntries(ids.map(id => [id, document.getElementById('pv-' + id).value]))));
+      calculer();
+    });
+    document.getElementById('pv-reset').addEventListener('click', () => {
+      if (!confirm('Revenir aux valeurs par défaut ? Vos hypothèses et événements seront effacés.')) return;
+      store.set(localStorage, PREVISION_KEY, null); App.render({ garderScroll: true });
+    });
+    calculer();
+  } };
+}
+
+</script>
+  <script>
+'use strict';
+
 /* ---------- Investissement locatif : capacité d'emprunt et projection du projet ----------
    Capacité : règles du Haut Conseil de stabilité financière (HCSF) appliquées par les banques ; mensualités de tous
    les crédits, assurance comprise, au plus 35 % des revenus nets avant impôt, durée au plus 25 ans. Le loyer attendu
@@ -2853,7 +3132,7 @@ const store = {
   set(s, k, v) { try { v == null ? s.removeItem(k) : s.setItem(k, v); } catch { /* stockage indisponible */ } },
 };
 
-const PAGES = { overview: pageOverview, recommandations: pageRecommandations, depenses: pageDepenses, epargne: pageEpargne, immobilier: pageImmobilier, locatif: pageLocatif, parametres: pageParametres };
+const PAGES = { overview: pageOverview, recommandations: pageRecommandations, depenses: pageDepenses, epargne: pageEpargne, immobilier: pageImmobilier, previsionnel: pagePrevisionnel, locatif: pageLocatif, parametres: pageParametres };
 
 const App = {
   M: null,
