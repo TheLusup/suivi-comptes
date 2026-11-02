@@ -2622,8 +2622,9 @@ function pageRecommandations(M, state) {
    crédit, valeur du bien). À partir du mois prochain, chaque support (enveloppe de placement, livret, fonds monétaire)
    reçoit son versement mensuel fixe, revalorisé chaque janvier comme les revenus ; un livret plein ne reçoit plus que
    ce qui tient sous son plafond. L'écart entre ce qui reste du mois et ces versements (primes comprises, et ce qui
-   dépasse les plafonds) va sur le compte d'épargne choisi. S'il manque de l'argent, il est pris sur les liquidités,
-   puis ce compte, les autres livrets et les placements disponibles (le PER, le PEE et la pension restent bloqués).
+   dépasse les plafonds) va sur le compte d'épargne choisi. S'il manque de l'argent, il est pris sur ce compte, puis
+   les liquidités, les autres livrets et les placements disponibles (le PER, le PEE et la pension restent bloqués).
+   Les voyages sont un budget annuel à part, payé le mois choisi : ils pèsent ce mois-là sur le compte de l'écart.
    Chaque enveloppe rapporte son rendement, les biens se valorisent. Revenus et dépenses augmentent chaque janvier.
    Le mois en cours n'est projeté que pour ce qui reste à venir.
    Net de sortie : patrimoine net moins l'impôt sur les gains des placements s'ils étaient retirés et les frais de
@@ -2639,6 +2640,7 @@ const NB_EVENEMENTS = 3;
 const NOMS_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const SCENARIOS = { prudent: { placements: -2, immo: -1 }, central: { placements: 0, immo: 0 }, favorable: { placements: 2, immo: 1 } };
 const CAT_INTERETS = 'Intérêts du crédit immobilier';
+const CAT_VOYAGES = 'Voyages';
 // Enveloppes de placement : rendement proposé, blocage, impôt à la sortie (ps : prélèvements sociaux sur les gains ;
 // av : prélèvements sociaux + 7,5 % après 8 ans ; pfu : 30 % ; per : versements à la TMI + gains au PFU ; revenu : TMI)
 const ENVELOPPES = [
@@ -2693,8 +2695,13 @@ function hypothesesPrevision(M) {
   let debut = D.addMonths(cm, -12);
   if (achat && D.addMonths(achat, 1) > debut) debut = D.addMonths(achat, 1);
   const mois = debut < cm ? D.range(debut, D.addMonths(cm, -1)) : [];
-  const horsCredit = mk => { const p = F.pnl(V, mk); return p.charges + (p.parCat.get(normKey(CAT_INTERETS)) || 0); };
+  // Voyages à part : budget annuel (budget.json, sinon la moyenne des mêmes mois), payé le mois où ils ont le plus coûté
+  const voyagesMois = mk => -(F.pnl(V, mk).parCat.get(normKey(CAT_VOYAGES)) || 0);
+  const horsCredit = mk => { const p = F.pnl(V, mk); return p.charges + (p.parCat.get(normKey(CAT_INTERETS)) || 0) - voyagesMois(mk); };
   const depenses = mois.length ? mois.reduce((s, mk) => s + horsCredit(mk), 0) / mois.length : F.budgetTotal(V, cm);
+  const budgetVoyages = parseNum(M.budget.mensuel?.[CAT_VOYAGES]);
+  const voyages = budgetVoyages != null ? budgetVoyages * 12 : mois.length ? mois.reduce((s, mk) => s + voyagesMois(mk), 0) / mois.length * 12 : 0;
+  const plusGros = D.range(D.addMonths(cm, -12), D.addMonths(cm, -1)).reduce((a, mk) => (voyagesMois(mk) > voyagesMois(a) ? mk : a), D.addMonths(cm, -12));
   // Mois des primes : celui du plus gros virement de salaire des 3 dernières années
   const sal = M.transactions.filter(t => t.montant > 0 && normKey(t.categorie) === normKey('Salaire') && t.date >= D.addMonths(cm, -36) + '-01');
   const max = sal.reduce((a, t) => (!a || t.montant > a.montant ? t : a), null);
@@ -2704,7 +2711,8 @@ function hypothesesPrevision(M) {
   return {
     salaire: loc.salMoi, primes: loc.primesMoi, moisPrimes: max ? Number(max.date.slice(5, 7)) : 12, primeProchaine: '', autres: 0, hausseSalaire: 2,
     nouveauSalaire: '', moisNouveauSalaire: '',
-    depenses: Math.round(depenses / 10) * 10, inflation: 2,
+    // depensesHorsVoyages remplace « depenses » (voyages compris) : une ancienne saisie ne compte pas les voyages deux fois
+    depensesHorsVoyages: Math.round(depenses / 10) * 10, inflation: 2, voyages: Math.round(voyages / 100) * 100, moisVoyages: Number(plusGros.slice(5, 7)),
     ...Object.fromEntries(env.flatMap(e => [[`rdt_${e.cle}`, e.rdt], [`vers_${e.cle}`, Math.round(e.flux / 12 / 10) * 10]])),
     ...Object.fromEntries(livrets.map(c => [`vers_${c.id}`, 0])),
     ...(livrets.length ? { surplus: (livrets.find(c => c.type === 'fonds-monetaire') || livrets[0]).id } : {}),
@@ -2763,8 +2771,11 @@ function projectionPrevision(M, v, ecarts = SCENARIOS.central, { extra = 0 } = {
     const salaire = nouveau != null && depuis && mk >= depuis ? nouveau * Math.pow(1 + g, Number(mk.slice(0, 4)) - Number(depuis.slice(0, 4))) : v.salaire * kRev;
     const prime = Number(mk.slice(5, 7)) !== v.moisPrimes ? 0 : mk === prochaine && primeSaisie != null ? primeSaisie : v.primes * kRev;
     let revenus = salaire + v.autres * kRev + prime;
-    let depenses = v.depenses * kDep - (i > 0 ? extra : 0);
+    let depenses = v.depensesHorsVoyages * kDep - (i > 0 ? extra : 0);
     if (i === 0) { revenus = Math.max(0, revenus - dejaRecu); depenses = Math.max(0, depenses - dejaDepense); }
+    // Voyages : le budget de l'année, payé en une fois le mois choisi (comptés dans les dépenses du mois)
+    const voyages = i > 0 && Number(mk.slice(5, 7)) === v.moisVoyages ? v.voyages * kDep : 0;
+    depenses += voyages;
     const e = echeances.get(mk), dueEnsuite = e && (i > 0 || e.date > today);
     let interets = dueEnsuite ? e.interets : 0, assurance = dueEnsuite ? e.assurance : 0, capital = dueEnsuite ? e.capital : 0;
     let evts = evenements.filter(x => x.mois === mk).reduce((s, x) => s + x.montant, 0);
@@ -2810,11 +2821,12 @@ function projectionPrevision(M, v, ecarts = SCENARIOS.central, { extra = 0 } = {
     const ecart = disponible - verses, versCpt = ecart + horsPlafond;
     if (versCpt >= 0) { if (cpt) cpt.val += versCpt; else liq += versCpt; }
     else {
-      // Retraits : liquidités, compte de l'écart, autres livrets, puis placements disponibles au prorata ; au-delà, découvert
+      // Retraits : compte de l'écart, liquidités, autres livrets, puis placements disponibles au prorata ; au-delà, découvert
       let manque = -versCpt;
       const puiser = solde => { const x = Math.min(Math.max(0, solde), manque); manque -= x; return x; };
+      if (cpt) cpt.val -= puiser(cpt.val);
       liq -= puiser(liq);
-      [cpt, ...livrets.filter(x => x !== cpt)].filter(Boolean).forEach(x => { x.val -= puiser(x.val); });
+      livrets.filter(x => x !== cpt).forEach(x => { x.val -= puiser(x.val); });
       const libres = env.filter(x => !x.bloque), totLibre = libres.reduce((s, x) => s + Math.max(0, x.val), 0);
       if (manque > 0 && totLibre > 0) {
         const pris = Math.min(manque, totLibre);
@@ -2832,7 +2844,7 @@ function projectionPrevision(M, v, ecarts = SCENARIOS.central, { extra = 0 } = {
       const gain = Math.max(0, x.val - x.versements);
       return s + ({ ps: gain * 0.172, av: gain * 0.247, pfu: gain * 0.3, per: Math.max(0, x.versements) * tmi + gain * 0.3, revenu: x.val * tmi }[x.impot] || 0);
     }, 0);
-    lignes.push({ mk, revenus, prime, depenses, interets, assurance, capital, evts, achatLocatif, epargne, disponible, verses, ecart, versCpt, rendements, valorisation, apportBien,
+    lignes.push({ mk, revenus, prime, depenses, voyages, interets, assurance, capital, evts, achatLocatif, epargne, disponible, verses, ecart, versCpt, rendements, valorisation, apportBien,
       liq, ep, plDispo, plBloque, immo, crd, net, dispo: liq + ep + plDispo, sortie: net - impots - immo * v.fraisVente / 100 });
   });
   return { net0: P0.net, lignes };
@@ -2912,8 +2924,12 @@ function pagePrevisionnel(M, state) {
         </div>
         <h3 class="cats-titre">Dépenses</h3>
         <div class="form-row">
-          ${champ('depenses', 'Dépenses courantes par mois', `Hors crédit immobilier ; moyenne de vos derniers mois : ${eur(defaut.depenses)}.`, { pas: 10 })}
+          ${champ('depensesHorsVoyages', 'Dépenses courantes par mois', `Hors crédit immobilier et hors voyages ; moyenne de vos derniers mois : ${eur(defaut.depensesHorsVoyages)}.`, { pas: 10 })}
           ${champ('inflation', 'Hausse annuelle des dépenses', 'Inflation, appliquée chaque janvier ; sert aussi aux euros d’aujourd’hui.', { pas: 0.25, unite: '%', min: null })}
+        </div>
+        <div class="form-row">
+          ${champ('voyages', 'Voyages par an', 'Budget de l’année, payé en une fois ; pris sur le compte de l’écart (voir plus bas).', { pas: 100 })}
+          <label>Mois des voyages<select id="pv-moisVoyages">${NOMS_MOIS.map((n, i) => `<option value="${i + 1}" ${Number(h.moisVoyages) === i + 1 ? 'selected' : ''}>${n}</option>`).join('')}</select><span class="muted small">D’après vos voyages des 12 derniers mois.</span></label>
         </div>
         <p class="small muted">${credits.length ? `Crédit immobilier repris du tableau d’amortissement : ${credits.map(b => `${esc(b.pret.nom || b.nom)}, votre part ${eur((parseNum(b.pret.mensualite) || 0) * Immo.part(b))} par mois hors assurance, jusqu’en ${D.monthLabel(D.monthKey(b.echeancier[b.echeancier.length - 1]?.date || b.dateAchat))}`).join(' ; ')}. Les intérêts et l’assurance sont des dépenses, le capital de l’épargne.` : 'Aucun crédit immobilier renseigné.'}</p>
         <h3 class="cats-titre">Épargne et placements</h3>
@@ -3017,11 +3033,12 @@ function pagePrevisionnel(M, state) {
       if (env.length || livrets.length) {
         const tot = [...env.map(e => e.cle), ...livrets.map(c => c.id)].reduce((s, k) => s + Math.max(0, v['vers_' + k] || 0), 0);
         const mois12 = nominal.central.lignes.slice(1, 13), n = mois12.length || 1;
-        const capacite = mois12.reduce((s, x) => s + x.disponible - x.prime, 0) / n, primes = mois12.reduce((s, x) => s + x.prime, 0);
+        const capacite = mois12.reduce((s, x) => s + x.disponible - x.prime + x.voyages, 0) / n, primes = mois12.reduce((s, x) => s + x.prime, 0);
+        const voyages12 = mois12.reduce((s, x) => s + x.voyages, 0);
         const ecart = capacite - tot, nomCpt = livrets.find(c => c.id === v.surplus)?.nom || 'les liquidités';
         set('pv-total-vers', eur(tot));
-        set('pv-controle', `Capacité d’épargne prévue : <strong>${eur(capacite)}</strong> par mois en moyenne sur les 12 prochains mois (hors primes), pour <strong>${eur(tot)}</strong> de versements. `
-          + `<span class="${Math.abs(ecart) <= 50 ? 'pos' : ecart < 0 ? 'neg' : ''}">Écart ${eurSigned(ecart)} par mois</span>${ecart < -50 ? ', pris chaque mois sur ' : ' vers '}${esc(nomCpt)}, plus ${eur(primes)} de primes sur 12 mois.`);
+        set('pv-controle', `Capacité d’épargne prévue : <strong>${eur(capacite)}</strong> par mois en moyenne sur les 12 prochains mois (hors primes et voyages), pour <strong>${eur(tot)}</strong> de versements. `
+          + `<span class="${Math.abs(ecart) <= 50 ? 'pos' : ecart < 0 ? 'neg' : ''}">Écart ${eurSigned(ecart)} par mois</span>${ecart < -50 ? ', pris chaque mois sur ' : ' vers '}${esc(nomCpt)}, plus ${eur(primes)} de primes et ${eurSigned(-voyages12)} de voyages sur 12 mois.`);
       }
       centralNominal = nominal.central;
       const R = Object.fromEntries(Object.entries(nominal).map(([k, r]) => [k, conv(r)]));
@@ -3063,7 +3080,7 @@ function pagePrevisionnel(M, state) {
       // ---- Tableau des 12 mois ----
       const avecEvts = douze.some(x => x.evts);
       set('pv-mois', `<thead><tr><th>Mois</th><th class="num">Revenus</th><th class="num">Dépenses courantes</th><th class="num">Intérêts et assurance</th>${avecEvts ? '<th class="num">Événements</th>' : ''}<th class="num">Épargne du mois</th><th class="num">Versements fixes</th><th class="num">Écart</th><th class="num">Rendements</th><th class="num">Disponible</th><th class="num">Patrimoine net</th></tr></thead>
-        <tbody>${douze.map((x, i) => `<tr><td class="nowrap">${D.monthLabel(x.mk)}${i === 0 ? ' <span class="muted small">(reste)</span>' : ''}</td><td class="num">${eur(x.revenus)}</td><td class="num">${eur(x.depenses)}</td><td class="num">${eur(x.interets + x.assurance)}</td>
+        <tbody>${douze.map((x, i) => `<tr><td class="nowrap">${D.monthLabel(x.mk)}${i === 0 ? ' <span class="muted small">(reste)</span>' : ''}</td><td class="num">${eur(x.revenus)}</td><td class="num">${eur(x.depenses)}${x.voyages ? `<span class="muted small"> dont ${eur(x.voyages)} de voyages</span>` : ''}</td><td class="num">${eur(x.interets + x.assurance)}</td>
           ${avecEvts ? `<td class="num">${x.evts ? eurSigned(x.evts) : ''}${x.achatLocatif ? '<span class="muted small"> achat locatif</span>' : ''}</td>` : ''}<td class="num ${x.epargne < 0 ? 'neg' : 'pos'}">${eurSigned(x.epargne)}${x.capital ? `<span class="muted small"> dont ${eur(x.capital)} de capital</span>` : ''}</td>
           <td class="num">${x.verses ? eur(x.verses) : '<span class="muted">—</span>'}</td><td class="num ${x.ecart < 0 ? 'neg' : ''}">${eurSigned(x.ecart)}</td>
           <td class="num">${eurSigned(x.rendements + x.valorisation)}</td><td class="num">${eur(x.dispo)}</td><td class="num"><strong>${eur(x.net)}</strong></td></tr>`).join('')}</tbody>`);
