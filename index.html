@@ -2569,11 +2569,53 @@ const recoItem = (r, i, page) => `
       ${r.lien && r.lien !== page ? `<a class="link small" href="${r.lien}">Voir les données →</a>` : ''}
     </li>`;
 
+// Repères chiffrés par ligne du PEA, sans verdict : écart au prix de revient, aux plus haut et plus bas des 24 dernières
+// fins de mois, variation sur un mois, poids, et frais de courtage (budget.json → conseils.pea.courtage, par ordre)
+// rapportés à la ligne. Pour deux ETF sur le même indice : coût d'un regroupement et durée pour le rembourser selon
+// l'écart de frais annuels (conseils.pea.ter, en % par ticker, s'il est renseigné).
+function indicateursPea(M) {
+  const today = D.today(), cm = F.moisCourant(), c = M.budget.conseils?.pea || {};
+  const courtage = parseNum(c.courtage), ter = c.ter || {};
+  const lignes = F.positionsAt(M, 'pea', today).filter(p => p.quantite > 0);
+  if (!lignes.length) return '';
+  const total = lignes.reduce((s, p) => s + p.quantite * p.cours, 0);
+  const fins = Array.from({ length: 24 }, (_, k) => D.endOfMonth(D.addMonths(cm, -1 - k)));
+  const rows = lignes.map(p => {
+    const v = p.quantite * p.cours, hist = fins.map(d => ({ d, c: F.coursAt(M, 'pea', p.titre, d) })).filter(x => x.c);
+    const haut = hist.reduce((a, x) => (!a || x.c > a.c ? x : a), null), bas = hist.reduce((a, x) => (!a || x.c < a.c ? x : a), null);
+    const c1 = F.coursAt(M, 'pea', p.titre, fins[0]);
+    return { p, v, pru: p.pru ? p.cours / p.pru - 1 : null, haut, bas, m1: c1 ? p.cours / c1 - 1 : null };
+  }).sort((a, b) => b.v - a.v);
+  const cellule = x => `<td class="num ${x != null && x < 0 ? 'neg' : ''}">${pctSigned(x)}</td>`;
+  const table = `<div class="table-wrap"><table>
+    <thead><tr><th>Ligne</th><th class="num">Valeur</th><th class="num">Poids</th><th class="num">vs prix de revient</th><th class="num">Depuis fin ${D.monthLabel(D.monthKey(fins[0]))}</th><th class="num">vs plus haut</th><th class="num">vs plus bas</th>${courtage ? '<th class="num">Un ordre</th>' : ''}</tr></thead>
+    <tbody>${rows.map(r => `<tr><td><strong>${esc(r.p.titre)}</strong></td><td class="num">${eur(r.v)}</td><td class="num muted">${pct(r.v / total)}</td>${cellule(r.pru)}${cellule(r.m1)}
+      <td class="num" title="${r.haut ? `${eur(r.haut.c, true)} fin ${D.monthLabel(D.monthKey(r.haut.d))}` : ''}">${r.haut ? `${pctSigned(r.p.cours / r.haut.c - 1)} <span class="muted small">${D.monthLabel(D.monthKey(r.haut.d))}</span>` : '—'}</td>
+      <td class="num" title="${r.bas ? `${eur(r.bas.c, true)} fin ${D.monthLabel(D.monthKey(r.bas.d))}` : ''}">${r.bas ? pctSigned(r.p.cours / r.bas.c - 1) : '—'}</td>
+      ${courtage ? `<td class="num ${courtage / r.v > 0.05 ? 'neg' : 'muted'}">${pct(courtage / r.v)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
+    <p class="small muted">Plus haut et plus bas : sur les 24 dernières fins de mois (cours de clôture).${courtage ? ` « Un ordre » : frais de courtage d’un achat ou d’une vente (${eur(courtage, true)}) rapportés à la valeur de la ligne.` : ''} Une chute brutale sur un mois vient souvent d’une annonce de l’entreprise : la lire avant de décider. Dans un PEA, vendre à perte n’apporte aucun avantage fiscal.</p>`;
+  // Deux ETF sur le même indice : coût du regroupement de la plus petite ligne dans l'autre, et années pour le rembourser
+  const doublons = rows.filter(r => /S&P 500/i.test(r.p.titre));
+  let regroupement = '';
+  if (doublons.length > 1 && courtage) {
+    const cout = 2 * courtage, ecarts = [0.03, 0.05, 0.1];
+    const t = doublons.map(r => parseNum(ter[r.p.ticker]));
+    const reel = t.every(x => x != null) ? Math.abs(t[0] - t[1]) : null;
+    regroupement = `<h3 class="cats-titre">Regrouper les ETF S&P 500 ?</h3>
+      <p class="small">Vendre une ligne puis racheter l’autre coûte ${eur(cout, true)} (deux ordres), sans impôt dans le PEA. L’économie vient de l’écart de frais annuels (TER) entre les deux ETF, appliqué à la ligne déplacée :</p>
+      <div class="table-wrap"><table><thead><tr><th>Ligne déplacée</th>${(reel != null ? [reel] : ecarts).map(e => `<th class="num">Écart ${String(Math.round(e * 100) / 100).replace('.', ',')} point${reel != null ? ' (vos ETF)' : ''}</th>`).join('')}</tr></thead>
+      <tbody>${doublons.map(r => `<tr><td>${esc(r.p.titre)} <span class="muted small">${eur(r.v)} · coût ${pct(cout / r.v)}</span></td>${(reel != null ? [reel] : ecarts).map(e => { const an = r.v * e / 100; return `<td class="num">${an > 0 ? `${eur(an, true)}/an · ${Math.ceil(cout / an)} ans` : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>
+      <p class="small muted">${reel == null ? 'Renseignez les frais annuels de chaque ETF (fiche de l’émetteur) dans budget.json → conseils.pea.ter pour le calcul exact. ' : ''}Garder la ligne et ne verser que sur l’ETF le moins cher ne coûte rien : le regroupement n’apporte alors que la simplicité d’une seule ligne.</p>`;
+  }
+  return `<h3 class="cats-titre">Repères par ligne</h3>${table}${regroupement}`;
+}
+
 // Encart de la page Épargne : les pistes des supports affichés (un onglet), ou toutes celles de l'épargne (type vide)
 function encartRecos(M, type, state) {
   const recos = recommandations(M).filter(r => r.types && (!type || r.types.includes(type)));
   if (!recos.length) return '';
   return UI.repli(`recos-${type || 'tous'}`, 'Recommandations', `<ol class="recos">${recos.map((r, i) => recoItem(r, i, '#epargne')).join('')}</ol>
+    ${type === 'pea' ? indicateursPea(M) : ''}
     <p class="small muted">Repères de bonne gestion appliqués à vos chiffres, pas un conseil en investissement personnalisé : faites confirmer un choix par un professionnel. <a class="link" href="#recommandations">Toutes les recommandations →</a></p>`,
     { sub: `${recos.length} piste${recos.length > 1 ? 's' : ''} pour ${type ? 'ce support' : 'l’épargne et les placements'}`, state, ouvert: true });
 }
