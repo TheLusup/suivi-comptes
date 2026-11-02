@@ -2175,6 +2175,8 @@ function pageEpargne(M, state) {
         ${UI.kpi('TRI annualisé', tri ? pctSigned(tri.taux) : '—', tri ? `depuis le ${D.fmt(tri.debut)}${tri12 ? ` · ${pctSigned(tri12.taux)} sur 12 mois` : ''}` : 'versements non renseignés ou historique insuffisant')}
       </div></section>
 
+      ${encartRecos(M, groupe?.type || '', state)}
+
       ${UI.card('Gains mensuels', UI.chart('ch-gains', 240), { sub: 'Variation de valeur hors versements, 12 derniers mois', cls: choix ? 'span-12' : 'span-6' })}
       ${choix ? '' : UI.card('Encours par compte', UI.chart('ch-comptes', 240), { sub: '24 derniers mois', cls: 'span-6' })}
 
@@ -2187,7 +2189,7 @@ function pageEpargne(M, state) {
         <tbody>${rows}</tbody>
         <tfoot><tr><td colspan="2">Total</td><td class="num">${eur(total)}</td><td class="num">${idsV.length ? eur(vers) : '—'}</td><td class="num">${pv == null ? '—' : UI.delta(pv)}</td><td class="num">${pv != null && vers ? pctSigned(pv / vers) : '—'}</td><td class="num">${pctSigned(p12.pct)}</td><td class="num">${triCell(tri)}</td><td></td></tr></tfoot>
         </table></div>
-        <p class="small muted">Performance 12 mois calculée hors versements (méthode de Dietz simplifiée). TRI : taux de rendement interne annualisé depuis le premier relevé du compte, qui tient compte de la date de chaque versement et retrait (relevés mensuels). « — » : versements non renseignés dans soldes.csv ou moins de 3 mois d’historique. PEA : versements estimés à partir du prix de revient ; fonds monétaire en devises : historique reconstitué.</p>`,
+        <p class="small muted">Performance 12 mois calculée hors versements (méthode de Dietz simplifiée). TRI : taux de rendement interne annualisé depuis le premier relevé du compte, qui tient compte de la date de chaque versement et retrait (relevés mensuels). « — » : versements non renseignés dans soldes.csv ou moins de 3 mois d’historique. PEA : versements estimés à partir du prix de revient ; fonds monétaire en devises : historique tiré du relevé du fonds.</p>`,
         { sub: `${comptesVue.length} compte${comptesVue.length > 1 ? 's' : ''} · versé, plus-value, performance, TRI, poids`, state })}
     </div>`;
 
@@ -2319,7 +2321,8 @@ function recommandations(M) {
   const moy = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
   const nb = (v, d = 1) => v.toLocaleString('fr-FR', { maximumFractionDigits: d });
   const recos = [];
-  const ajout = (niveau, theme, titre, constat, piste, lien) => recos.push({ niveau, theme, titre, constat, piste, lien });
+  // types : supports concernés (onglets de la page Épargne où la piste s'affiche) ; [] = vue « Tous les comptes » seulement
+  const ajout = (niveau, theme, titre, constat, piste, lien, types) => recos.push({ niveau, theme, titre, constat, piste, lien, types });
   const compte = id => M.comptes.find(c => c.id === id);
   const valeur = id => compte(id) && F.ouvert(compte(id), today) ? F.valeur(M, id, today) : 0;
   const m12 = mois(12), m6 = mois(6), m3 = mois(3);
@@ -2342,7 +2345,7 @@ function recommandations(M) {
       n < 6 ? `Porter l’épargne de précaution à 6 mois de dépenses (${nb(n)} mois aujourd’hui)` : `Épargne de précaution : ${nb(n)} mois de dépenses, objectif atteint`,
       `${eur(dispo)} disponibles (livrets et fonds monétaire), pour ${eur(besoin)} de sorties par mois (charges des 6 derniers mois + votre part du capital du crédit). Objectif 6 mois : ${eur(cible)}.`,
       n < 6 ? `Il manque ${eur(manque)}. Un virement automatique de ${eur(Math.ceil(manque / 6 / 50) * 50)} par mois vers le Livret A, le lendemain du salaire, comble l’écart en 6 mois. Le Livret A a encore ${eur(placeA)} de place${pleins.length ? ` ; ${pleins.join(', ')} ${pleins.length > 1 ? 'sont pleins' : 'est plein'}` : ''}.`
-        : `Au-delà, l’épargne supplémentaire peut aller vers des projets ou le long terme plutôt que vers les livrets.`, '#epargne');
+        : `Au-delà, l’épargne supplémentaire peut aller vers des projets ou le long terme plutôt que vers les livrets.`, '#epargne', ['livret', 'fonds-monetaire']);
   }
 
   // 2. Trésorerie des comptes courants : fins de mois dans le rouge
@@ -2412,8 +2415,25 @@ function recommandations(M) {
     const etf = pea.filter(l => /ETF|iShares|Amundi|BNP Easy|S&P|Nasdaq|MSCI/i.test(l.titre)).reduce((s, l) => s + l.v, 0);
     ajout(us / totPea > 0.6 ? 'moyenne' : 'basse', 'Placements', `PEA : environ ${pct(us / totPea)} exposé aux actions américaines`,
       `${eur(us)} sur ${eur(totPea)} : ETF S&P 500 et Nasdaq-100 en totalité, MSCI World à ~70 % (poids des États-Unis dans l’indice). ETF : ${pct(etf / totPea)} du PEA, actions françaises en direct : ${pct(1 - etf / totPea)}.${sp.length > 1 ? ` Deux ETF suivent le même indice S&P 500 (${sp.map(l => `${esc(l.titre)} ${eur(l.v)}`).join(', ')}).` : ''}`,
-      `C’est un choix à assumer en connaissance de cause (dollar, valorisations, poids de quelques grandes valeurs technologiques). ${sp.length > 1 ? 'Les deux ETF S&P 500 font doublon : les regrouper simplifie le suivi sans changer l’exposition. ' : ''}Si vous voulez moins dépendre des États-Unis, c’est l’orientation des prochains versements qui permet d’ajuster, sans vendre.`, '#epargne');
+      `C’est un choix à assumer en connaissance de cause (dollar, valorisations, poids de quelques grandes valeurs technologiques). ${sp.length > 1 ? 'Les deux ETF S&P 500 font doublon : les regrouper simplifie le suivi sans changer l’exposition. ' : ''}Si vous voulez moins dépendre des États-Unis, c’est l’orientation des prochains versements qui permet d’ajuster, sans vendre.`, '#epargne', ['pea']);
+
+    // Lignes du PEA qui pèsent trop peu pour compter dans la performance (hors lignes achetées depuis moins de 3 mois)
+    const recente = l => { const h = F.historiqueLigne(M, 'pea', l.titre); return h && !h.avantDebut && h.depuis >= D.addMonths(cm, -3) + '-01'; };
+    const seuil = 0.02 * totPea, petites = pea.filter(l => l.v < seuil && !recente(l)).sort((a, b) => a.v - b.v);
+    if (petites.length >= 3) ajout(petites.length >= 6 ? 'moyenne' : 'basse', 'Placements', `PEA : ${pea.length} lignes, dont ${petites.length} de moins de ${eur(seuil)}`,
+      `Lignes sous 2 % du PEA : ${petites.map(l => `${esc(l.titre)} ${eur(l.v)}`).join(', ')}, soit ${eur(petites.reduce((s, l) => s + l.v, 0))} au total.`,
+      `Une ligne de moins de 2 % ne change presque rien à la performance du PEA mais alourdit le suivi. Vendre et racheter à l’intérieur du PEA n’est pas imposé : regrouper ne coûte que les frais de courtage. Seul un retrait d’argent hors du PEA avant 5 ans le clôturerait.`, '#epargne', ['pea']);
   }
+
+  // Répartition de l'épargne : disponible sans risque, retirable mais investi, bloqué (retraite, 5 ans)
+  const BLOQUE = ['per', 'pee', 'pension'];
+  const ouvertsEp = M.comptes.filter(c => ['epargne', 'placements'].includes(F.classe(c)) && F.ouvert(c, today));
+  const poche = f => ouvertsEp.filter(f).reduce((s, c) => s + F.valeur(M, c.id, today) * c.quotePart, 0);
+  const sur = poche(c => F.classe(c) === 'epargne'), bloque = poche(c => BLOQUE.includes(c.type)), investi = poche(c => F.classe(c) === 'placements' && !BLOQUE.includes(c.type));
+  const totEp = sur + investi + bloque;
+  if (totEp > 0) ajout('basse', 'Placements', `Répartition de l’épargne : ${pct(sur / totEp)} disponible, ${pct(investi / totEp)} investi, ${pct(bloque / totEp)} bloqué`,
+    `${eur(totEp)} au total : ${eur(sur)} sur les livrets et le fonds monétaire (disponibles, sans risque de perte, hormis le change du fonds en livres), ${eur(investi)} sur le PEA et les assurances vie (retirables, mais leur valeur varie), ${eur(bloque)} sur le PER, le PEE et la pension (bloqués jusqu’à la retraite ou 5 ans).`,
+    `Repère courant : l’épargne de précaution (voir la piste dédiée) et les projets à moins de 5 ans sur les supports disponibles, le reste sur les placements de long terme. Au-delà de ce besoin, l’argent des livrets rapporte en général moins que l’inflation sur longue période.`, '#epargne', []);
 
   // 9. Assurance vie : nombre de fonds et part des fonds thématiques
   const av = lignes('av'), totAv = av.reduce((s, l) => s + l.v, 0);
@@ -2422,7 +2442,7 @@ function recommandations(M) {
     const petits = av.filter(l => l.v < 300);
     ajout('moyenne', 'Placements', `Assurance vie : ${av.length} fonds pour ${eur(totAv)}`,
       `Fonds thématiques (robotique, IA, sécurité, santé, sport, blockchain) : ${eur(them.reduce((s, l) => s + l.v, 0))}, soit ${pct(them.reduce((s, l) => s + l.v, 0) / totAv)}. ${petits.length} lignes de moins de 300 € (${petits.map(l => esc(l.titre)).join(', ')}).`,
-      `Beaucoup de fonds se recouvrent (plusieurs fonds actions monde) sans diversifier davantage, et les fonds thématiques ont en général des frais plus élevés et plus de volatilité. Une revue annuelle (frais de chaque fonds, recouvrements, lignes trop petites pour compter) aide à garder un contrat lisible. Les arbitrages à l’intérieur du contrat ne sont pas imposés.`, '#epargne');
+      `Beaucoup de fonds se recouvrent (plusieurs fonds actions monde) sans diversifier davantage, et les fonds thématiques ont en général des frais plus élevés et plus de volatilité. Une revue annuelle (frais de chaque fonds, recouvrements, lignes trop petites pour compter) aide à garder un contrat lisible. Les arbitrages à l’intérieur du contrat ne sont pas imposés.`, '#epargne', ['assurance-vie']);
   }
 
   // 10. Frais de gestion de l'assurance vie et du PER (prestataire et libellé dans budget.json → conseils.frais)
@@ -2432,29 +2452,29 @@ function recommandations(M) {
     const encours = valeur('av') + valeur('per');
     ajout(mpp / encours > 0.006 ? 'moyenne' : 'basse', 'Frais', `Frais de gestion (${esc(R.frais.nom)}) : ${eur(mpp)} sur 12 mois`,
       `Prélevés chaque trimestre sur le compte courant, soit ${pct(mpp / encours)} de l’encours assurance vie + PER (${eur(encours)}), en plus des frais propres à chaque fonds.`,
-      `Comparer chaque année le coût total (frais de gestion + frais des fonds) avec d’autres contrats. Ne pas clôturer pour autant un contrat d’assurance vie ancien : sa date d’ouverture compte pour la fiscalité (après 8 ans).`, '#epargne');
+      `Comparer chaque année le coût total (frais de gestion + frais des fonds) avec d’autres contrats. Ne pas clôturer pour autant un contrat d’assurance vie ancien : sa date d’ouverture compte pour la fiscalité (après 8 ans).`, '#epargne', ['assurance-vie', 'per']);
   }
 
   // 11. Fonds monétaire en livres
-  const gbp = valeur('revolut-epargne');
+  const gbp = valeur('revolut-epargne'), versGbp = F.versements(M, 'revolut-epargne', today);
   if (gbp > 500) ajout('basse', 'Placements', `Fonds monétaire en livres : ${eur(gbp)}`,
-    `Placé en livres sterling : sa valeur en euros varie avec le change. Son historique est reconstitué${R.fondsMonetaire.detail ? `, ${esc(R.fondsMonetaire.detail)}` : ''}.`,
-    `S’il n’y a pas de dépense prévue en livres, c’est une épargne de précaution exposée au change. Vérifier aussi dans l’application le relevé du fonds pour expliquer l’écart.`, '#epargne');
+    `Placé en livres sterling : sa valeur en euros varie avec le change. ${eurSigned(gbp - versGbp)} sur ${eur(versGbp)} versés (intérêts, moins les frais et l’effet du change)${R.fondsMonetaire.detail ? ` ; ${esc(R.fondsMonetaire.detail)}` : ''}.`,
+    `Chaque conversion euros ↔ livres se fait au cours du jour : des allers-retours fréquents peuvent effacer les intérêts. S’il n’y a pas de dépense prévue en livres, un support en euros (livret, fonds monétaire en euros) offre la même disponibilité sans risque de change.`, '#epargne', ['fonds-monetaire']);
 
   // 12. PEE : abondement de l'employeur
   if (valeur('pee') > 0 || compte('pee')) ajout('moyenne', 'Placements', `PEE : vérifier le plafond d’abondement (${esc(R.pee.employeur)})`,
     R.pee.detail ? esc(R.pee.detail) : `Vos versements volontaires sur le PEE sont abondés par ${esc(R.pee.employeur)}.`,
-    `L’abondement est un complément immédiat versé par l’employeur, souvent le placement le plus rentable disponible, en échange d’un blocage de 5 ans (avec cas de déblocage anticipé). Vérifier dans l’accord ou sur l’espace ${esc(R.pee.gestionnaire)} si un versement plus élevé serait encore abondé.`, '#epargne');
+    `L’abondement est un complément immédiat versé par l’employeur, souvent le placement le plus rentable disponible, en échange d’un blocage de 5 ans (avec cas de déblocage anticipé). Vérifier dans l’accord ou sur l’espace ${esc(R.pee.gestionnaire)} si un versement plus élevé serait encore abondé.`, '#epargne', ['pee']);
 
   // 13. PER : intérêt fiscal selon la tranche d'imposition
   if (valeur('per') > 0) ajout('basse', 'Fiscalité', `PER : vérifier que la déduction fiscale vaut le blocage`,
     `${eur(valeur('per'))} sur le PER${R.per.detail ? `, ${esc(R.per.detail)}` : ''}. L’argent est bloqué jusqu’à la retraite (sauf achat de la résidence principale et accidents de la vie).`,
-    `Les versements se déduisent du revenu imposable : l’économie d’impôt est égale à votre tranche marginale (TMI). Vérifier sur l’avis d’impôt la TMI et le plafond « épargne retraite » disponible ; l’intérêt est fort à 30 % et plus, faible à 11 %.`, '#epargne');
+    `Les versements se déduisent du revenu imposable : l’économie d’impôt est égale à votre tranche marginale (TMI). Vérifier sur l’avis d’impôt la TMI et le plafond « épargne retraite » disponible ; l’intérêt est fort à 30 % et plus, faible à 11 %.`, '#epargne', ['per']);
 
   // 14. Pension britannique dormante
   if (valeur('pension-uk') > 0) ajout('basse', 'Placements', `Pension britannique : ${eur(valeur('pension-uk'))} sans cotisations depuis 2021`,
     `Plan ${esc(R.pension.gestionnaire)} « paid up », investi dans un portefeuille piloté.`,
-    `Garder l’adresse et l’e-mail à jour chez ${esc(R.pension.gestionnaire)} et vérifier une fois par an les frais annuels. Un transfert vers la France est complexe (régime fiscal spécifique, frais) : rarement intéressant pour ce montant.`, '#epargne');
+    `Garder l’adresse et l’e-mail à jour chez ${esc(R.pension.gestionnaire)} et vérifier une fois par an les frais annuels. Un transfert vers la France est complexe (régime fiscal spécifique, frais) : rarement intéressant pour ce montant.`, '#epargne', ['pension']);
 
   // 15. Crédit immobilier : rembourser par anticipation ou épargner
   const bien = M.immobilier?.[0];
@@ -2539,18 +2559,30 @@ function comparaisonBanque(M) {
     ${B.tarifDu ? `<p class="small muted">Tarif en vigueur depuis le ${esc(B.tarifDu)} ; la liste des avantages inclus varie selon le pays : vérifiez-la dans l’application avant de souscrire.</p>` : ''}`;
 }
 
-function pageRecommandations(M, state) {
-  const recos = recommandations(M), B = reperesConseils(M).banque, comparaison = comparaisonBanque(M);
-  const filtre = NIVEAUX[state.niveauReco] ? state.niveauReco : '';
-  const compte = n => recos.filter(r => r.niveau === n).length;
-  const liste = recos.filter(r => !filtre || r.niveau === filtre).map((r, i) => `
+// Une piste (page Recommandations et encart de la page Épargne) ; pas de lien vers la page où elle est affichée
+const recoItem = (r, i, page) => `
     <li class="reco">
       <div class="reco-h"><span class="reco-rang">${i + 1}</span><span class="status ${NIVEAUX[r.niveau].cls}">● ${NIVEAUX[r.niveau].label}</span><span class="tag">${esc(r.theme)}</span></div>
       <h3>${r.titre}</h3>
       <p class="muted">${r.constat}</p>
       <p><strong>Piste :</strong> ${r.piste}</p>
-      ${r.lien && r.lien !== '#recommandations' ? `<a class="link small" href="${r.lien}">Voir les données →</a>` : ''}
-    </li>`).join('');
+      ${r.lien && r.lien !== page ? `<a class="link small" href="${r.lien}">Voir les données →</a>` : ''}
+    </li>`;
+
+// Encart de la page Épargne : les pistes des supports affichés (un onglet), ou toutes celles de l'épargne (type vide)
+function encartRecos(M, type, state) {
+  const recos = recommandations(M).filter(r => r.types && (!type || r.types.includes(type)));
+  if (!recos.length) return '';
+  return UI.repli(`recos-${type || 'tous'}`, 'Recommandations', `<ol class="recos">${recos.map((r, i) => recoItem(r, i, '#epargne')).join('')}</ol>
+    <p class="small muted">Repères de bonne gestion appliqués à vos chiffres, pas un conseil en investissement personnalisé : faites confirmer un choix par un professionnel. <a class="link" href="#recommandations">Toutes les recommandations →</a></p>`,
+    { sub: `${recos.length} piste${recos.length > 1 ? 's' : ''} pour ${type ? 'ce support' : 'l’épargne et les placements'}`, state, ouvert: true });
+}
+
+function pageRecommandations(M, state) {
+  const recos = recommandations(M), B = reperesConseils(M).banque, comparaison = comparaisonBanque(M);
+  const filtre = NIVEAUX[state.niveauReco] ? state.niveauReco : '';
+  const compte = n => recos.filter(r => r.niveau === n).length;
+  const liste = recos.filter(r => !filtre || r.niveau === filtre).map((r, i) => recoItem(r, i, '#recommandations')).join('');
   const html = `
     <div class="page-h"><h1>Recommandations</h1><p class="muted">${recos.length} pistes calculées à partir de vos données au ${D.fmt(D.today())}</p></div>
     <div class="grid">
