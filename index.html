@@ -4,14 +4,42 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta name="theme-color" content="#030b17">
+  <meta name="theme-color" content="#f5f3ff">
   <title>Desk Patrimoine</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%234f6bff'/%3E%3Crect x='13' y='34' width='10' height='17' rx='3' fill='white'/%3E%3Crect x='27' y='23' width='10' height='28' rx='3' fill='white'/%3E%3Crect x='41' y='13' width='10' height='38' rx='3' fill='white'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
   <style>
-/* Thème « néobanque » : sombre bleu nuit par défaut, clair en option (bouton ◐) */
+/* Thème « doux et lumineux » : lavande clair par défaut, sombre bleu nuit en option (bouton ◐) */
 :root {
+  color-scheme: light;
+  --page: #f5f3ff;
+  --page-glow: radial-gradient(1100px 600px at 0% -10%, rgba(138, 108, 240, .16), transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(255, 154, 139, .12), transparent 60%);
+  --sidebar: rgba(255, 255, 255, .82);
+  --surface: #ffffff;
+  --surface-2: #f4f2fc;
+  --surface-3: #e9e5f8;
+  --border: rgba(60, 40, 140, .07);
+  --text: #1b1636;
+  --text-2: #5b5675;
+  --muted: #9a95b3;
+  --grid: rgba(60, 40, 140, .07);
+  --axis: rgba(60, 40, 140, .16);
+  --series-1: #6c5ce7; --series-2: #21c59a; --series-3: #4da3ff; --series-4: #ffb547;
+  --series-5: #ff7a6b; --series-6: #e86fa8; --series-7: #35c3e8; --series-8: #8a6cf0;
+  --div-pos: #16b089; --div-neg: #f0604f;
+  --good: #16b089; --warning: #f2a52a; --critical: #f0604f;
+  --good-text: #0d9873; --critical-text: #d9503f; --warning-text: #b97800;
+  --good-soft: #eafbf5; --warning-soft: #fff6e8; --critical-soft: #fff1ee;
+  --accent: #6c5ce7;
+  --accent-soft: #efebff;
+  --shadow: 0 8px 24px rgba(108, 92, 231, .08);
+  /* Teintes assez foncées pour du texte blanc (contraste ≥ 4,5:1 sur tout le dégradé) */
+  --hero-grad: linear-gradient(120deg, #4a3ccf 0%, #6f55e0 55%, #a8526e 100%);
+  --radius: 24px;
+  --radius-sm: 16px;
+}
+:root[data-theme="dark"] {
   color-scheme: dark;
   --page: #030b17;
   --page-glow: radial-gradient(1200px 700px at 8% -10%, rgba(38, 92, 170, .55), transparent 60%), radial-gradient(900px 600px at 100% 0%, rgba(20, 60, 120, .25), transparent 60%);
@@ -31,34 +59,12 @@
   --div-neg: #ff5c64;
   --good: #24c99a; --warning: #f5b83d; --critical: #ff5c64;
   --good-text: #2fd6a4; --critical-text: #ff6b72; --warning-text: #f5b83d;
+  --good-soft: rgba(36, 201, 154, .12); --warning-soft: rgba(245, 184, 61, .12);
   --critical-soft: rgba(255, 92, 100, .14);
-  --accent: #4f6bff;
-  --accent-soft: rgba(79, 107, 255, .18);
-  --radius: 22px;
-  --radius-sm: 14px;
-}
-:root[data-theme="light"] {
-  color-scheme: light;
-  --page: #f2f4f8;
-  --page-glow: radial-gradient(1200px 600px at 8% -10%, rgba(79, 107, 255, .12), transparent 60%);
-  --sidebar: rgba(255, 255, 255, .78);
-  --surface: #ffffff;
-  --surface-2: #f0f2f6;
-  --surface-3: #e5e8ee;
-  --border: rgba(10, 20, 40, .07);
-  --text: #0a1120;
-  --text-2: #4a5568;
-  --muted: #8a94a6;
-  --grid: rgba(10, 20, 40, .06);
-  --axis: rgba(10, 20, 40, .14);
-  --series-1: #12a982; --series-2: #f0662f; --series-3: #4069f5; --series-4: #d99a12;
-  --series-5: #d6528f; --series-6: #7a5af0; --series-7: #1aa6cc; --series-8: #e5484f;
-  --div-pos: #12a982; --div-neg: #e5484f;
-  --good: #12a982; --warning: #d99a12; --critical: #e5484f;
-  --good-text: #0b8a68; --critical-text: #cf3a41; --warning-text: #a26f00;
-  --critical-soft: rgba(229, 72, 79, .09);
-  --accent: #3d5afe;
-  --accent-soft: rgba(61, 90, 254, .10);
+  --accent: #8a7bff;
+  --accent-soft: rgba(138, 123, 255, .18);
+  --shadow: none;
+  --hero-grad: linear-gradient(120deg, #3a2f9e 0%, #5b4bdb 55%, #8e4f73 100%);
 }
 
 * { box-sizing: border-box; }
@@ -74,29 +80,30 @@ h1 { font-size: 34px; font-weight: 800; margin: 0; letter-spacing: -.025em; }
 h2 { font-size: 15px; font-weight: 600; margin: 0; color: var(--text-2); }
 code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-size: 12px; }
 
-/* Barre latérale (barre d'onglets en bas d'écran sur mobile) */
+/* Navigation : barre en pilule en haut (barre d'onglets en bas d'écran sur mobile) */
 .sidebar {
-  position: fixed; inset: 0 auto 0 0; width: 104px; z-index: 10;
-  display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 20px 8px;
+  position: sticky; top: 12px; z-index: 10; width: calc(100% - 64px); max-width: 1256px; margin: 12px auto 0;
+  display: flex; align-items: center; gap: 14px; padding: 7px 8px 7px 10px; border-radius: 999px;
   background: var(--sidebar); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-  border-right: 1px solid var(--border);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
 }
 .brand {
-  width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center;
-  background: var(--text); color: var(--page); font-weight: 800; font-size: 18px; letter-spacing: -.04em; text-decoration: none;
+  width: 38px; height: 38px; flex: none; border-radius: 999px; display: grid; place-items: center;
+  background: linear-gradient(135deg, #6c5ce7, #ff7a6b); color: #fff; font-weight: 800; font-size: 13px; letter-spacing: -.03em; text-decoration: none;
 }
-.tabs { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+/* Centré tant que tout tient ; sinon défile depuis le premier onglet (marges auto plutôt que justify-content: center) */
+.tabs { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.tabs > a:first-child { margin-left: auto; } .tabs > a:last-child { margin-right: auto; }
+.tabs::-webkit-scrollbar { display: none; }
 .tabs a {
-  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 4px; border-radius: 16px;
-  color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 12px; text-align: center; line-height: 1.2;
+  display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; white-space: nowrap;
+  color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 13px; line-height: 1.2; transition: background .15s, color .15s;
 }
-.tabs svg { width: 46px; height: 40px; padding: 9px 12px; border-radius: 14px; fill: currentColor; transition: background .15s; }
+.tabs svg { display: none; width: 46px; height: 40px; padding: 9px 12px; border-radius: 14px; fill: currentColor; transition: background .15s; }
 .tabs svg .cut { fill: none; stroke: var(--sidebar); stroke-width: 2.2; }
-.tabs a:hover { color: var(--text); }
-.tabs a:hover svg { background: var(--surface-2); }
-.tabs a[aria-current="page"] { color: var(--text); }
-.tabs a[aria-current="page"] svg { background: var(--surface-3); }
-.tools { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.tabs a:hover { color: var(--text); background: var(--surface-2); }
+.tabs a[aria-current="page"] { color: var(--page); background: var(--text); }
+.tools { display: flex; align-items: center; gap: 8px; flex: none; }
 .tool-btns { display: flex; gap: 6px; }
 .pill { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
 .pill.demo { box-shadow: inset 0 0 0 1px var(--warning); }
@@ -108,7 +115,7 @@ code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-
 .icon-btn:hover { background: var(--surface-3); color: var(--text); }
 
 /* Mise en page */
-main { max-width: 1320px; margin: 0 auto; padding: 28px 32px 48px 136px; }
+main { max-width: 1320px; margin: 0 auto; padding: 28px 32px 48px; }
 .page-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
 .page-h p { margin: 0; flex-basis: 100%; color: var(--muted); }
 /* Sous-onglets (Dépenses : une banque ou tous les comptes) */
@@ -190,6 +197,32 @@ tr.ligne-courante td { background: var(--accent-soft); font-weight: 600; }
   .duo-lib .small, .duo .champ-unite span { display: none; }
   .duo input { padding-left: 10px; padding-right: 6px; }
 }
+/* Prévisionnel : synthèse, barre de flux, frise des mois */
+.pv-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.pv-stat { display: grid; gap: 6px; padding: 14px 16px; border-radius: var(--radius-sm); background: var(--surface-2); min-width: 0; }
+.pv-stat.bon { background: var(--good-soft); } .pv-stat.mauvais { background: var(--critical-soft); }
+.pv-stat.cle { background: var(--accent-soft); } .pv-stat.cle strong { color: var(--accent); }
+.pv-stat-lib { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.pv-stat strong { font-size: 24px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pv-flux-titre { margin: 16px 0 8px; }
+.pv-flux { display: flex; gap: 4px; height: 30px; }
+.pv-flux span { min-width: 6px; border-radius: 9px; background: var(--c); color: var(--on, #fff); font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+.pv-flux-legende { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 4px; width: auto; }
+.pv-flux-legende .val { margin-left: 4px; font-weight: 600; }
+.pv-frise-wrap { overflow-x: auto; margin: 0 -4px; padding: 2px 4px 6px; }
+.pv-frise { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(84px, 1fr); gap: 8px; }
+.pv-mois { display: grid; justify-items: center; gap: 4px; padding: 12px 6px 10px; border-radius: var(--radius-sm); background: var(--surface-2); text-align: center; }
+.pv-mois.note-mois { background: var(--accent-soft); }
+.pv-mois.neg-mois { background: var(--critical-soft); }
+.pv-barres { height: 90px; display: flex; align-items: flex-end; gap: 4px; margin-bottom: 4px; }
+.pv-barres span { width: 12px; border-radius: 5px; transition: height .3s ease; }
+.pv-barres .e { background: var(--good); } .pv-barres .s { background: var(--critical); opacity: .85; }
+.pv-mois strong { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pv-mois-lib { font-size: 12px; font-weight: 600; color: var(--text-2); }
+.pv-mois-note { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+.pv-synthese ~ .cats-titre { font-size: 15px; margin: 24px 0 10px; }
+.pv-frise-legende { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0 0; }
+@media (max-width: 760px) { .pv-stats { grid-template-columns: 1fr 1fr; } .pv-stat strong { font-size: 19px; } }
 /* Prévisionnel */
 .pv-unite { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; }
 .pv-unite select { width: auto; }
@@ -248,7 +281,7 @@ tr.abo-inactif td { opacity: .6; }
 .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; }
 .span-4 { grid-column: span 4; } .span-5 { grid-column: span 5; } .span-6 { grid-column: span 6; }
 .span-7 { grid-column: span 7; } .span-8 { grid-column: span 8; } .span-12 { grid-column: span 12; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; min-width: 0; box-shadow: var(--shadow); }
 .card-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
 .card-h h2::after { content: " ›"; color: var(--muted); font-weight: 500; }
 .card-sub { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
@@ -265,10 +298,27 @@ tr.abo-inactif td { opacity: .6; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 /* Chiffres clés */
-.hero { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 28px; align-items: center;
-  background: linear-gradient(135deg, rgba(79, 107, 255, .22), transparent 55%), var(--surface); }
+.hero { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 28px; align-items: center; padding: 28px 30px;
+  background: var(--hero-grad); border: 0; color: #fff; box-shadow: 0 16px 40px -8px rgba(108, 92, 231, .35); }
 .hero .kpi-label { font-size: 14px; }
-.prix-m2-zone { grid-column: 1 / -1; display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 14px; }
+/* Sur le dégradé : textes blancs, tuiles en verre dépoli */
+.hero .kpi-label, .hero .kpi-sub, .hero .muted, .hero .small, .hero .delta, .hero .champ-unite span { color: rgba(255, 255, 255, .92); }
+.hero :focus-visible { outline-color: #fff; }
+.hero .delta.up, .hero .delta.down, .hero strong { color: #fff; }
+.hero .hero-main > .kpi-label { text-transform: uppercase; letter-spacing: .08em; font-size: 12px; font-weight: 600; }
+.hero .kpi { background: rgba(255, 255, 255, .1); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.hero .kpi-value { color: #fff; }
+.hero input:not([type="checkbox"]) { background: rgba(255, 255, 255, .18); border-color: rgba(255, 255, 255, .3); color: #fff; }
+.hero .btn.ghost { color: #fff; border-color: rgba(255, 255, 255, .45); background: transparent; }
+.hero-deltas .delta { display: inline-block; padding: 2px 10px; border-radius: 999px; background: rgba(255, 255, 255, .18); }
+.prix-m2-zone { grid-column: 1 / -1; display: grid; gap: 8px; border-top: 1px solid rgba(255, 255, 255, .25); padding-top: 14px; }
+/* Salutation */
+.salut h1 { font-size: 32px; }
+.salut .muted { color: var(--text-2); font-size: 15px; }
+/* Points d'attention teintés selon leur statut */
+.attention:has(.status.good) { background: var(--good-soft); }
+.attention:has(.status.warning) { background: var(--warning-soft); }
+.attention:has(.status.critical) { background: var(--critical-soft); }
 .prix-m2-zone p { margin: 0; }
 .prix-m2 { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
 .prix-m2 .champ-unite input { width: 110px; flex: none; padding: 7px 10px; }
@@ -287,14 +337,17 @@ tr.abo-inactif td { opacity: .6; }
 /* Mobile : barre d'onglets en bas */
 @media (max-width: 760px) {
   .sidebar {
-    inset: auto 0 0 0; width: auto; height: auto; flex-direction: row; justify-content: space-around; gap: 0;
-    padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--border);
+    position: fixed; inset: auto 0 0 0; top: auto; width: auto; max-width: none; margin: 0; height: auto; justify-content: space-around; gap: 0;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; border-width: 1px 0 0;
   }
   .brand, .tools .pill { display: none; }
-  .tabs { flex-direction: row; justify-content: space-around; gap: 0; flex: 1; min-width: 0; }
-  .tabs a { flex: 1 1 0; min-width: 0; font-size: 9.5px; gap: 2px; padding: 2px 1px; }
+  .tabs { justify-content: space-around; gap: 0; overflow: visible; }
+  .tabs a { flex: 1 1 0; min-width: 0; flex-direction: column; font-size: 9.5px; gap: 2px; padding: 2px 1px; border-radius: 14px; }
+  .tabs a:hover, .tabs a[aria-current="page"] { background: none; }
+  .tabs a[aria-current="page"] { color: var(--accent); }
+  .tabs a[aria-current="page"] svg { background: var(--accent-soft); }
   .tabs a span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-  .tabs svg { width: 34px; height: 30px; padding: 5px 8px; }
+  .tabs svg { display: block; width: 34px; height: 30px; padding: 5px 8px; }
   .tools { margin: 0; }
   .tool-btns { flex-direction: column; gap: 4px; }
   .icon-btn { width: 30px; height: 30px; font-size: 14px; }
@@ -1531,9 +1584,10 @@ function pageOverview(M) {
   const pace = Number(today.slice(8, 10)) / D.daysInMonth(cm);
   const depasse = F.lignesBudget(V, cm).filter(r => r.budget > 0 && r.spent > r.budget);
 
+  const EMOJIS = { liquidites: '💧', epargne: '🌱', placements: '📈', immobilier: '🏡', autre: '📦', dettes: '💳' };
   const tiles = ['liquidites', 'epargne', 'placements', 'immobilier', 'autre', 'dettes']
     .filter(k => !['autre', 'immobilier', 'dettes'].includes(k) || now.par[k] !== 0)
-    .map(k => UI.kpi(CLASSES[k], eur(now.par[k]),
+    .map(k => UI.kpi(`<span aria-hidden="true">${EMOJIS[k]}</span> ${CLASSES[k]}`, eur(now.par[k]),
       `${pct(now.net ? now.par[k] / now.net : null)} du patrimoine · ${UI.delta(now.par[k] - finMoisDernier.par[k])}`))
     .join('');
 
@@ -1562,7 +1616,7 @@ function pageOverview(M) {
   }).join('');
 
   const html = `
-    <div class="page-h"><h1>Vue d'ensemble</h1><p class="muted">Situation au ${D.fmt(today)}</p></div>
+    <div class="page-h salut"><h1>Bonjour <span aria-hidden="true">👋</span></h1><p class="muted">Voici où en est votre patrimoine ce ${new Date(today + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}.</p></div>
     <div class="grid">
       <section class="card hero span-12">
         <div class="hero-main">
@@ -3031,7 +3085,12 @@ function pagePrevisionnel(M, state) {
         <div class="kpis hero-kpis locatif-kpis" id="pv-kpis"></div>
       </section>
 
-      ${UI.card('Cash flow des 12 prochains mois', `<div class="table-wrap"><table id="pv-mois" class="cashflow"></table></div>
+      ${UI.card('Cash flow des 12 prochains mois', `<div id="pv-synthese" class="pv-synthese"></div>
+        <h3 class="cats-titre">Mois par mois</h3>
+        <div class="pv-frise-wrap"><div id="pv-frise" class="pv-frise"></div></div>
+        <p class="small muted pv-frise-legende"><span class="nowrap"><span class="pastille" style="--c: var(--good)"></span> entrées</span> <span class="nowrap"><span class="pastille" style="--c: var(--critical)"></span> sorties</span> <span>· le chiffre : cash disponible du mois</span></p>
+        <h3 class="cats-titre">Le détail</h3>
+        <div class="table-wrap"><table id="pv-mois" class="cashflow"></table></div>
         <p class="small muted">Cash disponible du mois = entrées − sorties ± événements ; le crédit immobilier compte en entier (intérêts, assurance et capital). Ce cash va d’abord sur vos versements programmés, le reste sur le compte choisi dans vos hypothèses ; s’il est négatif, il y est pris, puis sur les liquidités, les autres livrets et les placements disponibles. Taux d’épargne = (cash disponible + capital remboursé, hors événements ponctuels) ÷ entrées, comme dans la vue d’ensemble. Trésorerie disponible = liquidités, épargne et placements non bloqués, en fin de mois. Le mois en cours ne compte que ce qui reste à venir.</p>`,
         { sub: 'Le reste du mois en cours puis 12 mois, scénario central', cls: 'span-12' })}
 
@@ -3248,6 +3307,32 @@ function pagePrevisionnel(M, state) {
           <tr class="cf-total"><th scope="row">Taux d’épargne</th>${douze.map(x => `<td class="num">${pct(taux(x))}</td>`).join('')}<td class="num strong-cell">${pct(tauxTotal)}</td></tr>
           <tr class="cf-cle"><th scope="row">Trésorerie disponible fin de mois</th>${cellules(x => x.dispo, eur)}<td class="num strong-cell">${eur(douze[douze.length - 1].dispo)}</td></tr>
         </tbody>`);
+      // ---- Synthèse du cash flow : 4 chiffres, puis où va l'argent (mêmes postes que le tableau) ----
+      const tEntrees = total(x => x.revenus), tSorties = total(x => x.depenses + credit(x)), tCash = total(x => x.disponible);
+      const tVerses = total(x => x.disponible - x.versCpt), tReste = total(x => x.versCpt), tEvts = total(x => x.evts);
+      const stat = (emoji, lib, val, cls) => `<div class="pv-stat ${cls}"><span class="pv-stat-lib"><span aria-hidden="true">${emoji}</span> ${lib}</span><strong>${val}</strong></div>`;
+      // [libellé, montant, couleur, couleur du texte sur la couleur (sombre sur les teintes claires)]
+      const parts = [['Dépenses', total(x => x.depenses), 'var(--series-5)', '#fff'], ['Crédit immobilier', total(credit), 'var(--series-4)', '#1b1636'],
+        ['Versements programmés', tVerses, 'var(--series-1)', '#fff'], [`Reste → ${cptCash ? cptCash.nom : 'liquidités'}`, tReste, 'var(--series-2)', '#1b1636']];
+      const base = parts.reduce((s, [, x]) => s + Math.max(0, x), 0) || 1;
+      set('pv-synthese', `<div class="pv-stats">
+          ${stat('💰', 'Entrées', eurSigned(tEntrees), 'bon')}${stat('🧾', 'Sorties', eurSigned(-tSorties), 'mauvais')}
+          ${stat('✨', 'Cash disponible', eurSigned(tCash), 'cle')}${stat('🏦', `Trésorerie fin ${D.monthLabel(douze[douze.length - 1].mk)}`, eur(douze[douze.length - 1].dispo), 'info')}
+        </div>
+        <p class="small muted pv-flux-titre">Où va l’argent sur la période${Math.abs(tEvts) >= 0.5 ? ` (événements ponctuels ${eurSigned(tEvts)} compris)` : ''}${tReste < -0.5 ? ` ; le reste négatif (${eur(tReste)}) est pris sur vos réserves et ne figure pas dans la barre` : ''}</p>
+        <div class="pv-flux" role="img" aria-label="${esc(parts.map(([n, x]) => `${n} ${eur(x)}`).join(', '))}">${parts.filter(([, x]) => x > 0.5).map(([n, x, c, on]) => `<span style="flex:${x / base};--c:${c};--on:${on}" title="${esc(n)} : ${eur(x)}">${x / base >= 0.07 ? `${Math.round(x / base * 100)} %` : ''}</span>`).join('')}</div>
+        <ul class="legende pv-flux-legende">${parts.map(([n, x, c]) => `<li><span class="pastille" style="--c:${c}"></span>${esc(n)} <span class="val ${x < -0.5 ? 'neg' : ''}">${eur(x)}</span></li>`).join('')}</ul>`);
+      // ---- Frise des mois : barres entrées / sorties à la même échelle, cash disponible, ce qui marque le mois ----
+      const haut = Math.max(1, ...douze.map(x => Math.max(x.revenus, x.depenses + credit(x))));
+      set('pv-frise', douze.map((x, i) => {
+        const deco = e => `<span aria-hidden="true">${e}</span> `;
+        const note = i === 0 ? 'reste du mois' : x.prime > 0.5 ? deco('🎁') + 'primes' : x.voyages > 0.5 ? deco('✈️') + 'voyages' : Math.abs(x.evts) >= 0.5 ? deco('📌') + 'événement' : '';
+        const h = v => (v > 0.5 ? `${Math.max(3, Math.round(v / haut * 100))}%` : '0');
+        return `<div class="pv-mois ${x.disponible < -0.5 ? 'neg-mois' : note && i > 0 ? 'note-mois' : ''}">
+          <div class="pv-barres" aria-hidden="true"><span class="e" style="height:${h(x.revenus)}"></span><span class="s" style="height:${h(x.depenses + credit(x))}"></span></div>
+          <strong class="${x.disponible < -0.5 ? 'neg' : ''}">${eurSigned(x.disponible)}</strong>
+          <span class="pv-mois-lib">${D.monthLabel(x.mk)}</span><span class="pv-mois-note">${note || '&nbsp;'}</span></div>`;
+      }).join(''));
       // ---- Détail par année ----
       const parAnnee = [...new Set(Lg.map(x => x.mk.slice(0, 4)))].map(a => {
         const l = Lg.filter(x => x.mk.startsWith(a));
@@ -3655,6 +3740,9 @@ const App = {
   render({ garderScroll = false } = {}) {
     const route = this.route(), view = document.getElementById('view'), y = window.scrollY;
     document.querySelectorAll('[data-route]').forEach(a => a.setAttribute('aria-current', a.dataset.route === route ? 'page' : 'false'));
+    // Barre d'onglets trop étroite : l'onglet courant est ramené au centre
+    const tabs = document.querySelector('.tabs'), courant = tabs?.querySelector('[aria-current="page"]');
+    if (courant && tabs.scrollWidth > tabs.clientWidth) tabs.scrollLeft = courant.offsetLeft - tabs.offsetLeft - (tabs.clientWidth - courant.offsetWidth) / 2;
     const pill = document.getElementById('source-pill');
     pill.className = 'pill ' + (this.M ? this.M.source : 'none');
     pill.textContent = this.state.loading ? 'Chargement…' : this.M
@@ -3677,8 +3765,8 @@ const App = {
     if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
   },
   toggleTheme() {
-    // Thème sombre par défaut ; le clair est un choix explicite
-    const cur = document.documentElement.dataset.theme || 'dark';
+    // Thème clair (lavande) par défaut ; le sombre est un choix explicite
+    const cur = document.documentElement.dataset.theme || 'light';
     const next = cur === 'dark' ? 'light' : 'dark';
     store.set(localStorage, THEME_KEY, next);
     this.applyTheme(next);
