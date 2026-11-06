@@ -361,6 +361,13 @@ table.ops th, table.ops td { padding: 5px 10px; font-size: .9em; }
 .heat-table td.heat { border-left: 2px solid var(--surface); }
 .heat-table th[scope="row"] { font-weight: 500; white-space: nowrap; }
 .strong-cell { font-weight: 650; border-left: 1px solid var(--border); }
+/* Cash flow du Prévisionnel : postes en lignes, mois en colonnes, première colonne figée au défilement */
+table.cashflow th, table.cashflow td { padding: 6px 8px; font-size: 13px; white-space: nowrap; }
+table.cashflow th[scope="row"] { font-weight: 500; position: sticky; left: 0; background: var(--surface); z-index: 1; }
+table.cashflow thead th:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+table.cashflow tr.cf-section th { position: static; padding-top: 14px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+table.cashflow tr.cf-total th, table.cashflow tr.cf-total td { font-weight: 650; }
+table.cashflow tr.cf-cle th, table.cashflow tr.cf-cle td { font-weight: 700; background: var(--surface-2); }
 
 .chart { position: relative; width: 100%; }
 
@@ -2889,9 +2896,12 @@ function projectionPrevision(M, v, ecarts = SCENARIOS.central, { extra = 0 } = {
     const kRev = Math.pow(1 + g, ans), kDep = Math.pow(1 + v.inflation / 100, ans);
     const salaire = nouveau != null && depuis && mk >= depuis ? nouveau * Math.pow(1 + g, Number(mk.slice(0, 4)) - Number(depuis.slice(0, 4))) : v.salaire * kRev;
     const prime = Number(mk.slice(5, 7)) !== v.moisPrimes ? 0 : mk === prochaine && primeSaisie != null ? primeSaisie : v.primes * kRev;
-    let revenus = salaire + v.autres * kRev + prime;
-    let depenses = v.depensesHorsVoyages * kDep - (i > 0 ? extra : 0);
+    const autres = v.autres * kRev, courantes = v.depensesHorsVoyages * kDep - (i > 0 ? extra : 0);
+    let revenus = salaire + autres + prime, depenses = courantes;
     if (i === 0) { revenus = Math.max(0, revenus - dejaRecu); depenses = Math.max(0, depenses - dejaDepense); }
+    // Déjà encaissé et déjà payé ce mois-ci (mois en cours seulement), pour le tableau de cash flow
+    const dejaEncaisse = salaire + autres + prime - revenus, dejaPaye = courantes - depenses;
+    let loyers = 0, chargesLoc = 0;
     // Voyages : le budget de l'année, payé en une fois le mois choisi (comptés dans les dépenses du mois)
     const voyages = i > 0 && Number(mk.slice(5, 7)) === v.moisVoyages ? v.voyages * kDep : 0;
     depenses += voyages;
@@ -2907,8 +2917,9 @@ function projectionPrevision(M, v, ecarts = SCENARIOS.central, { extra = 0 } = {
       } else {
         locK++;
         const an = Math.floor((locK - 1) / 12);
-        revenus += L.v.loyer * (1 - L.v.vacance / 12) * Math.pow(1 + L.v.revalLoyer / 100, an) * qL;
-        depenses += L.v.chargesLoc * Math.pow(1 + L.v.revalCharges / 100, an) * qL;
+        loyers = L.v.loyer * (1 - L.v.vacance / 12) * Math.pow(1 + L.v.revalLoyer / 100, an) * qL;
+        chargesLoc = L.v.chargesLoc * Math.pow(1 + L.v.revalCharges / 100, an) * qL;
+        revenus += loyers; depenses += chargesLoc;
         if (locCrd > 0.005) {
           const iL = locCrd * L.r, cL = Math.min(locCrd, L.echeance * qL - iL);
           interets += iL; capital += cL; assurance += L.assurance * qL; locCrd -= cL;
@@ -2927,13 +2938,15 @@ function projectionPrevision(M, v, ecarts = SCENARIOS.central, { extra = 0 } = {
     if (L && mk > achatL) { const gx = locVal * rLv; locVal += gx; valorisation += gx; }
     // Versements fixes à partir du mois prochain, revalorisés chaque janvier comme les revenus ; ce qui dépasse le
     // plafond d'un livret rejoint l'écart du mois
+    // vs_<support> : ce qui est réellement versé sur chaque support ce mois-ci (champs plats, convertis en euros d'aujourd'hui)
     let verses = 0, horsPlafond = 0;
+    const parSupport = {};
     if (i > 0) {
       const kVers = Math.pow(1 + g, ans);
-      env.forEach(x => { const a = x.mensuel * kVers; x.val += a; x.versements += a; verses += a; });
+      env.forEach(x => { const a = x.mensuel * kVers; x.val += a; x.versements += a; verses += a; parSupport['vs_' + x.cle] = a; });
       livrets.forEach(x => {
         const a = x.mensuel * kVers, place = x.plafond == null ? a : Math.min(a, Math.max(0, x.plafond - x.val));
-        x.val += place; verses += a; horsPlafond += a - place;
+        x.val += place; verses += a; horsPlafond += a - place; parSupport['vs_' + x.id] = place;
       });
     }
     // Écart entre le disponible du mois et les versements fixes : vers le compte choisi, ou retrait s'il est négatif
@@ -2963,7 +2976,7 @@ function projectionPrevision(M, v, ecarts = SCENARIOS.central, { extra = 0 } = {
       const gain = Math.max(0, x.val - x.versements);
       return s + ({ ps: gain * 0.172, av: gain * 0.247, pfu: gain * 0.3, per: Math.max(0, x.versements) * tmi + gain * 0.3, revenu: x.val * tmi }[x.impot] || 0);
     }, 0);
-    lignes.push({ mk, revenus, prime, depenses, voyages, interets, assurance, capital, evts, achatLocatif, epargne, disponible, verses, ecart, versCpt, rendements, valorisation, apportBien,
+    lignes.push({ mk, salaire, autres, loyers, dejaEncaisse, courantes, chargesLoc, dejaPaye, ...parSupport, revenus, prime, depenses, voyages, interets, assurance, capital, evts, achatLocatif, epargne, disponible, verses, ecart, versCpt, rendements, valorisation, apportBien,
       liq, ep, plDispo, plBloque, immo, crd, net, dispo: liq + ep + plDispo, sortie: net - impots - immo * v.fraisVente / 100 });
   });
   return { net0: P0.net, lignes };
@@ -3018,10 +3031,11 @@ function pagePrevisionnel(M, state) {
         <div class="kpis hero-kpis locatif-kpis" id="pv-kpis"></div>
       </section>
 
-      ${UI.card('Les 12 prochains mois', `${UI.chart('ch-prev-12', 260)}
-        <div class="table-wrap"><table id="pv-mois"></table></div>
-        <p class="small muted">Épargne du mois = revenus − dépenses courantes − intérêts et assurance des crédits ± événements ; elle comprend le capital remboursé, qui réduit la dette. Écart = épargne du mois − capital − versements fixes : il va sur le compte choisi dans vos hypothèses (ou y est pris s’il est négatif). Disponible = liquidités, épargne et placements non bloqués. Le mois en cours ne compte que ce qui reste à venir.</p>`,
-        { sub: 'Réalisé sur 12 mois, puis prévision (pointillés)', cls: 'span-12' })}
+      ${UI.card('Cash flow des 12 prochains mois', `<div class="table-wrap"><table id="pv-mois" class="cashflow"></table></div>
+        <p class="small muted">Cash disponible du mois = entrées − sorties ± événements ; le crédit immobilier compte en entier (intérêts, assurance et capital). Ce cash va d’abord sur vos versements programmés, le reste sur le compte choisi dans vos hypothèses ; s’il est négatif, il y est pris, puis sur les liquidités, les autres livrets et les placements disponibles. Taux d’épargne = (cash disponible + capital remboursé, hors événements ponctuels) ÷ entrées, comme dans la vue d’ensemble. Trésorerie disponible = liquidités, épargne et placements non bloqués, en fin de mois. Le mois en cours ne compte que ce qui reste à venir.</p>`,
+        { sub: 'Le reste du mois en cours puis 12 mois, scénario central', cls: 'span-12' })}
+
+      ${UI.card('Patrimoine net', UI.chart('ch-prev-12', 260), { sub: 'Réalisé sur 12 mois, puis prévision (pointillés)', cls: 'span-12' })}
 
       ${UI.card('Vos hypothèses', `<form class="form" id="form-prevision" onsubmit="return false">
         <h3 class="cats-titre">Revenus, nets d’impôt</h3>
@@ -3196,13 +3210,44 @@ function pagePrevisionnel(M, state) {
           ${UI.kpi('Aujourd’hui', eur(Lg[0][cle]), `fin ${libelleMois(Lg[0].mk)}`)}
         </div>`);
       }
-      // ---- Tableau des 12 mois ----
-      const avecEvts = douze.some(x => x.evts);
-      set('pv-mois', `<thead><tr><th>Mois</th><th class="num">Revenus</th><th class="num">Dépenses courantes</th><th class="num">Intérêts et assurance</th>${avecEvts ? '<th class="num">Événements</th>' : ''}<th class="num">Épargne du mois</th><th class="num">Versements fixes</th><th class="num">Écart</th><th class="num">Rendements</th><th class="num">Disponible</th><th class="num">Patrimoine net</th></tr></thead>
-        <tbody>${douze.map((x, i) => `<tr><td class="nowrap">${D.monthLabel(x.mk)}${i === 0 ? ' <span class="muted small">(reste)</span>' : ''}</td><td class="num">${eur(x.revenus)}</td><td class="num">${eur(x.depenses)}${x.voyages ? `<span class="muted small"> dont ${eur(x.voyages)} de voyages</span>` : ''}</td><td class="num">${eur(x.interets + x.assurance)}</td>
-          ${avecEvts ? `<td class="num">${x.evts ? eurSigned(x.evts) : ''}${x.achatLocatif ? '<span class="muted small"> achat locatif</span>' : ''}</td>` : ''}<td class="num ${x.epargne < 0 ? 'neg' : 'pos'}">${eurSigned(x.epargne)}${x.capital ? `<span class="muted small"> dont ${eur(x.capital)} de capital</span>` : ''}</td>
-          <td class="num">${x.verses ? eur(x.verses) : '<span class="muted">—</span>'}</td><td class="num ${x.ecart < 0 ? 'neg' : ''}">${eurSigned(x.ecart)}</td>
-          <td class="num">${eurSigned(x.rendements + x.valorisation)}</td><td class="num">${eur(x.dispo)}</td><td class="num"><strong>${eur(x.net)}</strong></td></tr>`).join('')}</tbody>`);
+      // ---- Cash flow des 12 mois : une ligne par poste, une colonne par mois, puis le total ----
+      const cptCash = livrets.find(c => c.id === v.surplus) || livrets.find(c => c.type === 'fonds-monetaire') || livrets[0] || null;
+      const credit = x => x.interets + x.assurance + x.capital;
+      // [libellé, valeur du mois, classe] ; signe : les sorties sont affichées en négatif ; ligne masquée si toujours nulle
+      const sections = [
+        ['Entrées', [
+          ['Salaire', x => x.salaire], ['Primes', x => x.prime], ['Autres revenus', x => x.autres], ['Loyers du locatif', x => x.loyers],
+          ['Déjà encaissé ce mois-ci', x => -x.dejaEncaisse],
+        ], ['Total des entrées', x => x.revenus]],
+        ['Sorties', [
+          ['Dépenses courantes', x => -x.courantes], ['Voyages', x => -x.voyages], ['Charges du locatif', x => -x.chargesLoc],
+          ['Déjà payé ce mois-ci', x => x.dejaPaye], ['Crédit immobilier', x => -credit(x)],
+        ], ['Total des sorties', x => -(x.depenses + credit(x))]],
+      ];
+      const evtsLigne = [douze.some(x => x.achatLocatif) ? 'Événements ponctuels et apport du locatif' : 'Événements ponctuels', x => x.evts];
+      const affectation = [
+        ...env.map(e => [e.nom, x => x['vs_' + e.cle] || 0]),
+        ...livrets.map(c => [c.nom, x => x['vs_' + c.id] || 0]),
+        [cptCash ? `Reste du mois → ${cptCash.nom}` : 'Reste du mois → liquidités', x => x.versCpt],
+      ];
+      const nonNul = f => douze.some(x => Math.abs(f(x)) >= 0.5);
+      const total = f => douze.reduce((s, x) => s + f(x), 0);
+      const cellules = (f, fmt = eurSigned) => douze.map(x => { const y = f(x); return `<td class="num ${y < -0.5 ? 'neg' : ''}">${Math.abs(y) < 0.5 ? '<span class="muted">—</span>' : fmt(y)}</td>`; }).join('');
+      const ligne = ([lib, f], cls = '') => `<tr class="${cls}"><th scope="row">${esc(lib)}</th>${cellules(f)}<td class="num strong-cell">${eurSigned(total(f))}</td></tr>`;
+      const titre = lib => `<tr class="cf-section"><th scope="rowgroup" colspan="${douze.length + 2}">${lib}</th></tr>`;
+      // Hors événements ponctuels et apport du locatif, comme le taux de la vue d'ensemble (revenus − charges)
+      const taux = x => (x.revenus > 0.5 ? (x.disponible + x.capital - x.evts) / x.revenus : null);
+      const tauxTotal = total(x => x.revenus) > 0.5 ? total(x => x.disponible + x.capital - x.evts) / total(x => x.revenus) : null;
+      set('pv-mois', `<thead><tr><th></th>${douze.map((x, i) => `<th class="num nowrap">${D.monthLabel(x.mk)}${i === 0 ? '<br><span class="small">(reste)</span>' : ''}</th>`).join('')}<th class="num strong-cell">Total</th></tr></thead>
+        <tbody>
+          ${sections.map(([lib, postes, tot]) => titre(lib) + postes.filter(([, f]) => nonNul(f)).map(p => ligne(p)).join('') + ligne(tot, 'cf-total')).join('')}
+          ${nonNul(evtsLigne[1]) ? ligne(evtsLigne) : ''}
+          ${ligne(['Cash disponible du mois', x => x.disponible], 'cf-cle')}
+          ${titre('Où va ce cash')}
+          ${affectation.filter(([, f]) => nonNul(f)).map(p => ligne(p)).join('')}
+          <tr class="cf-total"><th scope="row">Taux d’épargne</th>${douze.map(x => `<td class="num">${pct(taux(x))}</td>`).join('')}<td class="num strong-cell">${pct(tauxTotal)}</td></tr>
+          <tr class="cf-cle"><th scope="row">Trésorerie disponible fin de mois</th>${cellules(x => x.dispo, eur)}<td class="num strong-cell">${eur(douze[douze.length - 1].dispo)}</td></tr>
+        </tbody>`);
       // ---- Détail par année ----
       const parAnnee = [...new Set(Lg.map(x => x.mk.slice(0, 4)))].map(a => {
         const l = Lg.filter(x => x.mk.startsWith(a));
