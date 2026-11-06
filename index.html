@@ -304,6 +304,7 @@ tr.abo-inactif td { opacity: .6; }
 /* Sur le dégradé : textes blancs, tuiles en verre dépoli */
 .hero .kpi-label, .hero .kpi-sub, .hero .muted, .hero .small, .hero .delta, .hero .champ-unite span { color: rgba(255, 255, 255, .92); }
 .hero :focus-visible { outline-color: #fff; }
+.hero a { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
 .hero .delta.up, .hero .delta.down, .hero strong { color: #fff; }
 .hero .hero-main > .kpi-label { text-transform: uppercase; letter-spacing: .08em; font-size: 12px; font-weight: 600; }
 .hero .kpi { background: rgba(255, 255, 255, .1); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
@@ -1567,6 +1568,32 @@ function carteAbonnements(M) {
     <p class="small muted">D’après le dernier prélèvement de chaque abonnement ; la liste se règle dans budget.json (section « abonnements »).</p>`;
 }
 
+/* ---------- Prix au m² d'un bien (onglet Immobilier) ----------
+   Il fixe la valeur du bien à partir d'aujourd'hui pour toutes les pages (Immo.valeur) : patrimoine de la vue
+   d'ensemble, Immobilier, Prévisionnel. */
+function champPrixM2(b) {
+  const today = D.today(), est = Immo.prixM2Estime(b), saisi = Immo.prixM2Saisi(b), e = Immo.estimation(b, today);
+  const val = Immo.valeur(b, today), an = Immo.annexes(b), cle = esc(String(b.id ?? b.nom));
+  return `<div class="prix-m2-zone"><div class="prix-m2">
+      <label class="champ-unite"><span class="kpi-label">Prix au m²</span>
+        <input type="number" class="ov-prixm2" data-bien="${cle}" min="0" step="1" inputmode="numeric" value="${Math.round(saisi ?? est ?? 0)}" aria-label="Prix au m² de ${esc(b.nom)}"><span>€/m²</span></label>
+      <span class="small muted">× ${Immo.surface(b).toLocaleString('fr-FR')} m²${an ? ` + ${eur(an)} (${esc(b.annexes?.detail || 'annexes')})` : ''} = <strong>${eur(val)}</strong> pour le bien, ${eur(val * Immo.part(b))} à votre part ·
+        ${saisi != null ? `prix saisi${est != null ? ` ; estimation du ${D.fmt(e.date)} : ${eur(est)}/m²` : ''}` : e ? `estimation du ${D.fmt(e.date)}` : 'aucune estimation'}</span>
+      ${saisi != null ? `<button type="button" class="btn ghost small ov-prixm2-reset" data-bien="${cle}">Revenir à l’estimation</button>` : ''}
+    </div>
+    <p class="small muted">La valeur qui en découle est reprise partout : patrimoine de la vue d’ensemble, Immobilier, Prévisionnel. Gardée dans ce navigateur ; les mois passés gardent les estimations d’immobilier.json.</p></div>`;
+}
+function brancherPrixM2(biens) {
+  const bienDe = el => biens.find(b => String(b.id ?? b.nom) === el.dataset.bien);
+  document.querySelectorAll('.ov-prixm2').forEach(el => el.addEventListener('change', () => {
+    const b = bienDe(el), v = parseNum(el.value), est = Immo.prixM2Estime(b);
+    // Vide, nul ou égal à l'estimation : on revient à l'estimation du fichier
+    Immo.setPrixM2(b, v == null || v <= 0 || (est != null && Math.round(v) === Math.round(est)) ? null : v);
+    App.render({ garderScroll: true });
+  }));
+  document.querySelectorAll('.ov-prixm2-reset').forEach(el => el.addEventListener('click', () => { Immo.setPrixM2(bienDe(el), null); App.render({ garderScroll: true }); }));
+}
+
 /* ---------- Vue d'ensemble ---------- */
 function pageOverview(M) {
   const today = D.today(), cm = F.moisCourant();
@@ -1591,19 +1618,12 @@ function pageOverview(M) {
       `${pct(now.net ? now.par[k] / now.net : null)} du patrimoine · ${UI.delta(now.par[k] - finMoisDernier.par[k])}`))
     .join('');
 
-  // Prix au m² des biens : il fixe la valeur du bien à partir d'aujourd'hui pour toutes les pages (Immo.valeur)
+  // Rappel du prix au m² retenu pour chaque bien ; il se modifie dans l'onglet Immobilier
   const biensM2 = (M.immobilier || []).filter(b => Immo.surface(b));
   const prixM2 = biensM2.map(b => {
-    const est = Immo.prixM2Estime(b), saisi = Immo.prixM2Saisi(b), e = Immo.estimation(b, today);
-    const val = Immo.valeur(b, today), an = Immo.annexes(b), cle = esc(String(b.id ?? b.nom));
-    return `<div class="prix-m2">
-      <label class="champ-unite"><span class="kpi-label">Prix au m²${biensM2.length > 1 ? ` · ${esc(b.nom)}` : ''}</span>
-        <input type="number" class="ov-prixm2" data-bien="${cle}" min="0" step="1" inputmode="numeric" value="${Math.round(saisi ?? est ?? 0)}" aria-label="Prix au m² de ${esc(b.nom)}"><span>€/m²</span></label>
-      <span class="small muted">× ${Immo.surface(b).toLocaleString('fr-FR')} m²${an ? ` + ${eur(an)} (${esc(b.annexes?.detail || 'annexes')})` : ''} = <strong>${eur(val)}</strong> pour le bien, ${eur(val * Immo.part(b))} à votre part ·
-        ${saisi != null ? `prix saisi${est != null ? ` ; estimation du ${D.fmt(e.date)} : ${eur(est)}/m²` : ''}` : e ? `estimation du ${D.fmt(e.date)}` : 'aucune estimation'}</span>
-      ${saisi != null ? `<button type="button" class="btn ghost small ov-prixm2-reset" data-bien="${cle}">Revenir à l’estimation</button>` : ''}
-    </div>`;
-  }).join('');
+    const saisi = Immo.prixM2Saisi(b), m2 = saisi ?? Immo.prixM2Estime(b);
+    return m2 == null ? '' : `<span><span aria-hidden="true">🏡</span> ${biensM2.length > 1 ? `${esc(b.nom)} : ` : ''}valorisé à <strong>${eur(m2)}/m²</strong> ${saisi != null ? '(prix saisi)' : '(estimation)'}</span>`;
+  }).filter(Boolean).join(' · ');
 
   const comptesRows = M.comptes.filter(c => F.ouvert(c, today)).map(c => {
     const maj = F.derniereMaj(M, c.id), age = maj ? D.diffDays(maj, today) : null;
@@ -1629,7 +1649,7 @@ function pageOverview(M) {
           </div>
         </div>
         <div class="kpis">${tiles}</div>
-        ${prixM2 ? `<div class="prix-m2-zone">${prixM2}<p class="small muted">La valeur qui en découle est reprise partout : patrimoine, Immobilier, Prévisionnel. Gardée dans ce navigateur ; les mois passés gardent les estimations d’immobilier.json.</p></div>` : ''}
+        ${prixM2 ? `<div class="prix-m2-zone"><p class="small">${prixM2} · <a href="#immobilier">modifier dans Immobilier →</a></p></div>` : ''}
       </section>
 
       ${UI.card('Évolution du patrimoine', UI.chart('ch-patrimoine', 300), { sub: '24 derniers mois, par grande classe d’actifs', cls: 'span-8' })}
@@ -1660,14 +1680,6 @@ function pageOverview(M) {
     </div>`;
 
   return { html, after() {
-    const bienDe = el => biensM2.find(b => String(b.id ?? b.nom) === el.dataset.bien);
-    document.querySelectorAll('.ov-prixm2').forEach(el => el.addEventListener('change', () => {
-      const b = bienDe(el), v = parseNum(el.value), est = Immo.prixM2Estime(b);
-      // Vide, nul ou égal à l'estimation : on revient à l'estimation du fichier
-      Immo.setPrixM2(b, v == null || v <= 0 || (est != null && Math.round(v) === Math.round(est)) ? null : v);
-      App.render({ garderScroll: true });
-    }));
-    document.querySelectorAll('.ov-prixm2-reset').forEach(el => el.addEventListener('click', () => { Immo.setPrixM2(bienDe(el), null); App.render({ garderScroll: true }); }));
     const months = F.mois(M, 24);
     const P = months.map(mk => F.patrimoine(M, F.dateFin(mk)));
     const keys = ['liquidites', 'epargne', 'placements', 'autre'].filter(k => P.some(p => p.par[k] !== 0));
@@ -2033,11 +2045,12 @@ function pageImmobilier(M, state) {
         </div>
         <div class="kpis">
           ${UI.kpi('Valeur estimée', eur(valeur), saisiM2 != null
-            ? `prix saisi sur la vue d’ensemble : ${eur(saisiM2)}/m² × ${surface.toLocaleString('fr-FR')} m²${Immo.annexes(b) ? ` + ${eur(Immo.annexes(b))} d’annexes` : ''} · estimation du fichier ${eur(estim?.valeur)}`
+            ? `prix saisi ci-dessous : ${eur(saisiM2)}/m² × ${surface.toLocaleString('fr-FR')} m²${Immo.annexes(b) ? ` + ${eur(Immo.annexes(b))} d’annexes` : ''} · estimation du fichier ${eur(estim?.valeur)}`
             : `${estim?.min && estim?.max ? `entre ${eur(estim.min)} et ${eur(estim.max)} · ` : ''}${esc(estim?.source || '')}${estim?.date ? ` (${D.fmt(estim.date)})` : ''}${surface ? ` · ${eur(valeur / surface)}/m²` : ''}`)}
           ${UI.kpi('Capital restant dû', eur(crd), `${pct(montant ? capRemb / montant : null)} remboursé · fin ${fin ? D.fmt(fin.date) : '—'}`)}
           ${UI.kpi('Plus-value latente', UI.delta(pv), `vs prix d’achat (${eur(prix)}) · ${UI.delta(valeur - cout)} vs coût total`)}
         </div>
+        ${Immo.surface(b) ? champPrixM2(b) : ''}
       </section>
 
       <section class="card span-12"><div class="kpis four">
@@ -2076,13 +2089,14 @@ function pageImmobilier(M, state) {
         <thead><tr><th>Année</th><th class="num">Échéances</th><th class="num">Capital</th><th class="num">Intérêts</th><th class="num">Assurance</th><th class="num">Restant dû fin d’année</th></tr></thead>
         <tbody>${rowsAn}</tbody>
         <tfoot><tr><td>Total</td><td class="num">${ech.length}</td><td class="num">${eur(somme(ech, 'capital'))}</td><td class="num">${eur(totInt)}</td><td class="num">${eur(totAss)}</td><td></td></tr></tfoot></table></div>
-        <p class="small muted">Calculé à partir de l’offre de prêt (mensualités constantes, intérêts arrondis au centime) ; ${payees.length} échéance${payees.length > 1 ? 's' : ''} payée${payees.length > 1 ? 's' : ''} au ${D.fmt(today)} (${eur(assPayee)} d’assurance). Pour mettre à jour la valeur du bien, changez le prix au m² sur la vue d’ensemble ou ajoutez une estimation datée dans <code>immobilier.json</code>.</p>`,
+        <p class="small muted">Calculé à partir de l’offre de prêt (mensualités constantes, intérêts arrondis au centime) ; ${payees.length} échéance${payees.length > 1 ? 's' : ''} payée${payees.length > 1 ? 's' : ''} au ${D.fmt(today)} (${eur(assPayee)} d’assurance). Pour mettre à jour la valeur du bien, changez le prix au m² en haut de cette page ou ajoutez une estimation datée dans <code>immobilier.json</code>.</p>`,
         { sub: 'Prêt et assurance des deux emprunteurs, par année civile', cls: 'span-12' })}
     </div>`;
 
   return { html, after() {
     const sel = document.getElementById('sel-bien');
     if (sel) sel.addEventListener('change', e => { state.bien = e.target.value; App.render(); });
+    brancherPrixM2(biens);
     // Un point par mois, de l'achat à la dernière échéance
     const mois = D.range(D.monthKey(b.dateAchat), fin ? D.monthKey(fin.date) : cm);
     const dates = mois.map(m => m === cm ? today : D.endOfMonth(m));
