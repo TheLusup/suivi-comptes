@@ -268,6 +268,10 @@ tr.abo-inactif td { opacity: .6; }
 .hero { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 28px; align-items: center;
   background: linear-gradient(135deg, rgba(79, 107, 255, .22), transparent 55%), var(--surface); }
 .hero .kpi-label { font-size: 14px; }
+.prix-m2-zone { grid-column: 1 / -1; display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 14px; }
+.prix-m2-zone p { margin: 0; }
+.prix-m2 { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.prix-m2 .champ-unite input { width: 110px; flex: none; padding: 7px 10px; }
 .hero-value { font-size: 48px; font-weight: 800; letter-spacing: -.035em; line-height: 1.05; margin: 6px 0 12px; }
 .hero-deltas { display: grid; gap: 5px; font-size: 13px; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
@@ -777,6 +781,8 @@ const Corrections = {
 };
 
 /* ---------- Immobilier (immobilier.json) ---------- */
+const PRIX_M2_KEY = 'suivi-comptes.prixM2';
+let prixM2Saisis = null;
 const Immo = {
   // Échéancier d'un prêt à taux fixe et mensualités constantes. Avec "capitalParEcheance" (tableau
   // d'amortissement de la banque), il est repris tel quel ; sinon il est recalculé (intérêts arrondis au
@@ -806,12 +812,44 @@ const Immo = {
     for (const e of b.echeancier) { if (e.date <= date) r = e.crd; else break; }
     return r;
   },
-  // Valeur estimée : dernière estimation connue à la date (0 avant l'achat)
+  // Dernière estimation datée d'immobilier.json à la date (la première si la date la précède)
+  estimation(b, date) {
+    let r = b.estimations[0] || null;
+    for (const e of b.estimations) { if (e.date <= date) r = e; else break; }
+    return r;
+  },
+  surface: b => parseNum(b.surface) || 0,
+  // Annexes valorisées à part du prix au m² (parking, cave…) : "annexes": { "montant", "detail" }
+  annexes: b => parseNum(b.annexes?.montant ?? b.annexes) || 0,
+  // Prix au m² de la dernière estimation, annexes déduites
+  prixM2Estime(b) {
+    const s = Immo.surface(b), e = Immo.estimation(b, D.today());
+    return s && e ? Math.max(0, e.valeur - Immo.annexes(b)) / s : null;
+  },
+  // Prix au m² saisi sur la vue d'ensemble (gardé dans ce navigateur), null sinon
+  saisiesPrixM2() {
+    if (!prixM2Saisis) { try { prixM2Saisis = JSON.parse(localStorage.getItem(PRIX_M2_KEY) || '{}') || {}; } catch { prixM2Saisis = {}; } }
+    return prixM2Saisis;
+  },
+  // Saisie { prix, date } : ignorée si immobilier.json contient depuis une estimation plus récente
+  prixM2Saisi(b) {
+    const s = Immo.surface(b) ? Immo.saisiesPrixM2()[String(b.id ?? b.nom)] : null, prix = parseNum(s?.prix);
+    if (!(prix > 0)) return null;
+    return b.estimations.some(e => e.date > (s.date || '')) ? null : prix;
+  },
+  setPrixM2(b, prix) {
+    const s = { ...Immo.saisiesPrixM2() }, cle = String(b.id ?? b.nom);
+    if (prix == null) delete s[cle]; else s[cle] = { prix, date: D.today() };
+    prixM2Saisis = s;
+    try { localStorage.setItem(PRIX_M2_KEY, JSON.stringify(s)); } catch { /* stockage indisponible */ }
+  },
+  // Valeur estimée à la date (0 avant l'achat) : dernière estimation connue ; à partir d'aujourd'hui, le prix au m²
+  // saisi (× surface + annexes) la remplace. Toutes les pages passent par ici (patrimoine, Immobilier, Prévisionnel).
   valeur(b, date) {
-    if (date < b.dateAchat || !b.estimations.length) return 0;
-    let v = b.estimations[0].valeur;
-    for (const e of b.estimations) { if (e.date <= date) v = e.valeur; else break; }
-    return v;
+    if (date < b.dateAchat) return 0;
+    const saisi = Immo.prixM2Saisi(b);
+    if (saisi != null && date >= D.today()) return saisi * Immo.surface(b) + Immo.annexes(b);
+    return Immo.estimation(b, date)?.valeur || 0;
   },
   // Votre quote-part (propriétaire marqué "moi"), 100 % à défaut
   part: b => parseNum((b.proprietaires || []).find(p => p.moi)?.part) ?? 1,
@@ -1346,6 +1384,28 @@ const UI = {
   empty: msg => `<p class="muted center pad">${msg}</p>`,
 };
 
+/* ---------- Indicateurs partagés ----------
+   Calculés à un seul endroit et repris tels quels par la vue d'ensemble, les Conseils et l'Épargne, pour que
+   les onglets affichent les mêmes chiffres. V = vue consolidée (vueDepenses). */
+// Les n mois complets qui précèdent le mois en cours
+const moisPasses = n => { const cm = F.moisCourant(); return D.range(D.addMonths(cm, -n), D.addMonths(cm, -1)); };
+const nbFr1 = v => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+// Épargne de précaution : livrets et fonds monétaire à votre part, rapportés aux sorties du mois : charges nettes des
+// 6 derniers mois + votre part du capital du crédit (3 derniers mois, l'échéance n'existant que depuis l'achat)
+function epargnePrecaution(M, V = vueDepenses(M, '')) {
+  const today = D.today(), moy = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
+  const dispo = M.comptes.filter(c => F.classe(c) === 'epargne' && F.ouvert(c, today)).reduce((s, c) => s + F.valeur(M, c.id, today) * c.quotePart, 0);
+  const charges = moy(moisPasses(6).map(m => F.pnl(V, m).charges));
+  const capital = moy(moisPasses(3).map(m => -(F.pnl(V, m).parCat.get(normKey('Capital crédit immobilier')) || 0)));
+  const besoin = charges + capital, cible = 6 * besoin;
+  return { dispo, charges, capital, besoin, cible, manque: Math.max(0, cible - dispo), mois: besoin > 0 ? dispo / besoin : null };
+}
+// Taux d'épargne des n derniers mois complets : (revenus − charges nettes) / revenus, capital du crédit en épargne
+function tauxEpargne(V, n) {
+  const P = moisPasses(n).map(m => F.pnl(V, m)), r = P.reduce((s, p) => s + p.revenus, 0);
+  return r > 0 ? P.reduce((s, p) => s + p.resultat, 0) / r : null;
+}
+
 /* ---------- Points d'attention ----------
    Constats calculés à partir des données (pas des conseils) : soldes négatifs, épargne disponible rapportée aux
    charges, catégories toujours au-dessus du budget, évolution du taux d'épargne, opérations à classer, comptes
@@ -1364,14 +1424,10 @@ function pointsAttention(M, V) {
       `${noms.join(', ')} : ${neg.map(s => `${eur(s.solde)} au ${D.fmt(s.date)}`).join(', ')}.`, '#overview');
   }
 
-  // Épargne disponible (livrets, fonds monétaire) rapportée aux charges mensuelles moyennes (6 derniers mois)
-  const dispo = M.comptes.filter(c => F.classe(c) === 'epargne' && F.ouvert(c, today)).reduce((s, c) => s + F.valeur(M, c.id, today) * c.quotePart, 0);
-  const charges6 = mois(6).reduce((s, m) => s + F.pnl(V, m).charges, 0) / 6;
-  if (charges6 > 0) {
-    const n = dispo / charges6;
-    ajout(n < 3 ? 'critical' : n < 6 ? 'warning' : 'good', `Épargne disponible : ${n.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} mois de charges`,
-      `${eur(dispo)} sur livrets et fonds monétaire, pour ${eur(charges6)} de charges nettes par mois en moyenne (6 derniers mois).`, '#epargne');
-  }
+  // Épargne de précaution : même calcul que la page Conseils
+  const prec = epargnePrecaution(M, V);
+  if (prec.mois != null) ajout(prec.mois < 3 ? 'critical' : prec.mois < 6 ? 'warning' : 'good', `Épargne de précaution : ${nbFr1(prec.mois)} mois de dépenses`,
+    `${eur(prec.dispo)} sur livrets et fonds monétaire, pour ${eur(prec.besoin)} de sorties par mois (charges des 6 derniers mois + votre part du capital du crédit). Objectif 6 mois : ${eur(prec.cible)}.`, '#recommandations');
 
   // Catégories au-dessus du budget chacun des 3 derniers mois
   const m3 = mois(3), lignes = m3.map(m => F.lignesBudget(V, m));
@@ -1379,11 +1435,10 @@ function pointsAttention(M, V) {
   if (toujours.length) ajout('warning', `${toujours.length} catégorie${toujours.length > 1 ? 's' : ''} au-dessus du budget 3 mois de suite`,
     toujours.map(r => `${esc(r.label)} (${eur(m3.reduce((s, m, i) => s + (lignes[i].find(y => y.key === r.key)?.spent || 0), 0) / 3)} / ${eur(r.budget)} par mois)`).join(', ') + '.', '#depenses');
 
-  // Taux d'épargne : 3 derniers mois contre 12 derniers mois
-  const taux = ms => { const P = ms.map(m => F.pnl(V, m)), r = P.reduce((s, p) => s + p.revenus, 0); return r > 0 ? P.reduce((s, p) => s + p.resultat, 0) / r : null; };
-  const t3 = taux(mois(3)), t12 = taux(mois(12));
+  // Taux d'épargne : 3 derniers mois contre 6 et 12 mois (les fenêtres de la page Conseils)
+  const t3 = tauxEpargne(V, 3), t6 = tauxEpargne(V, 6), t12 = tauxEpargne(V, 12);
   if (t3 != null && t12 != null) ajout(t3 < t12 - 0.05 ? 'warning' : 'good', `Taux d’épargne : ${pct(t3)} sur 3 mois`,
-    `contre ${pct(t12)} sur 12 mois (revenus − charges nettes, compte joint à votre part).`, '#depenses');
+    `contre ${t6 != null ? `${pct(t6)} sur 6 mois et ` : ''}${pct(t12)} sur 12 mois (revenus − charges nettes, compte joint à votre part, capital du crédit compté en épargne).`, '#depenses');
 
   // Opérations importantes non identifiées (Divers, Non catégorisé) sur 3 mois
   const aClasser = V.transactions.filter(t => t.date >= m3[0] + '-01' && t.montant <= -100 && ['divers', 'non categorise'].includes(normKey(t.categorie)));
@@ -1464,7 +1519,7 @@ function pageOverview(M) {
   const V = vueDepenses(M, '');
   const dep = F.depenses(V, cm), bud = F.budgetTotal(V, cm), rev = F.revenus(V, cm);
   const prevMk = D.addMonths(cm, -1), revPrev = F.pnl(V, prevMk).revenus;
-  const tauxEpargne = F.pnl(V, prevMk).taux;
+  const tauxMoisPrec = F.pnl(V, prevMk).taux;
   const ratio = bud > 0 ? dep.total / bud : 0;
   const pace = Number(today.slice(8, 10)) / D.daysInMonth(cm);
   const depasse = F.lignesBudget(V, cm).filter(r => r.budget > 0 && r.spent > r.budget);
@@ -1474,6 +1529,20 @@ function pageOverview(M) {
     .map(k => UI.kpi(CLASSES[k], eur(now.par[k]),
       `${pct(now.net ? now.par[k] / now.net : null)} du patrimoine · ${UI.delta(now.par[k] - finMoisDernier.par[k])}`))
     .join('');
+
+  // Prix au m² des biens : il fixe la valeur du bien à partir d'aujourd'hui pour toutes les pages (Immo.valeur)
+  const biensM2 = (M.immobilier || []).filter(b => Immo.surface(b));
+  const prixM2 = biensM2.map(b => {
+    const est = Immo.prixM2Estime(b), saisi = Immo.prixM2Saisi(b), e = Immo.estimation(b, today);
+    const val = Immo.valeur(b, today), an = Immo.annexes(b), cle = esc(String(b.id ?? b.nom));
+    return `<div class="prix-m2">
+      <label class="champ-unite"><span class="kpi-label">Prix au m²${biensM2.length > 1 ? ` · ${esc(b.nom)}` : ''}</span>
+        <input type="number" class="ov-prixm2" data-bien="${cle}" min="0" step="1" inputmode="numeric" value="${Math.round(saisi ?? est ?? 0)}" aria-label="Prix au m² de ${esc(b.nom)}"><span>€/m²</span></label>
+      <span class="small muted">× ${Immo.surface(b).toLocaleString('fr-FR')} m²${an ? ` + ${eur(an)} (${esc(b.annexes?.detail || 'annexes')})` : ''} = <strong>${eur(val)}</strong> pour le bien, ${eur(val * Immo.part(b))} à votre part ·
+        ${saisi != null ? `prix saisi${est != null ? ` ; estimation du ${D.fmt(e.date)} : ${eur(est)}/m²` : ''}` : e ? `estimation du ${D.fmt(e.date)}` : 'aucune estimation'}</span>
+      ${saisi != null ? `<button type="button" class="btn ghost small ov-prixm2-reset" data-bien="${cle}">Revenir à l’estimation</button>` : ''}
+    </div>`;
+  }).join('');
 
   const comptesRows = M.comptes.filter(c => F.ouvert(c, today)).map(c => {
     const maj = F.derniereMaj(M, c.id), age = maj ? D.diffDays(maj, today) : null;
@@ -1499,6 +1568,7 @@ function pageOverview(M) {
           </div>
         </div>
         <div class="kpis">${tiles}</div>
+        ${prixM2 ? `<div class="prix-m2-zone">${prixM2}<p class="small muted">La valeur qui en découle est reprise partout : patrimoine, Immobilier, Prévisionnel. Gardée dans ce navigateur ; les mois passés gardent les estimations d’immobilier.json.</p></div>` : ''}
       </section>
 
       ${UI.card('Évolution du patrimoine', UI.chart('ch-patrimoine', 300), { sub: '24 derniers mois, par grande classe d’actifs', cls: 'span-8' })}
@@ -1512,7 +1582,7 @@ function pageOverview(M) {
         <dl class="facts">
           <div><dt>Revenus du mois</dt><dd>${rev ? eur(rev) : `<span class="muted">pas encore reçus (${D.monthLabel(prevMk)} : ${eur(revPrev)})</span>`}</dd></div>
           <div><dt>Reste à dépenser</dt><dd>${bud - dep.total >= 0 ? eur(bud - dep.total) : `<span class="neg">${eur(bud - dep.total)}</span>`}</dd></div>
-          <div><dt>Taux d’épargne (${D.monthLabel(prevMk)})</dt><dd>${pct(tauxEpargne)}</dd></div>
+          <div><dt>Taux d’épargne (${D.monthLabel(prevMk)})</dt><dd>${pct(tauxMoisPrec)}</dd></div>
         </dl>
         ${depasse.length ? `<p class="small"><span class="status critical">▲ Dépassé</span> ${depasse.map(r => esc(r.label)).join(', ')}</p>` : '<p class="small"><span class="status good">✓ OK</span> Aucune catégorie en dépassement</p>'}
         <a class="link" href="#depenses">Détail des dépenses →</a>`, { sub: 'Mois en cours', cls: 'span-4' })}
@@ -1529,6 +1599,14 @@ function pageOverview(M) {
     </div>`;
 
   return { html, after() {
+    const bienDe = el => biensM2.find(b => String(b.id ?? b.nom) === el.dataset.bien);
+    document.querySelectorAll('.ov-prixm2').forEach(el => el.addEventListener('change', () => {
+      const b = bienDe(el), v = parseNum(el.value), est = Immo.prixM2Estime(b);
+      // Vide, nul ou égal à l'estimation : on revient à l'estimation du fichier
+      Immo.setPrixM2(b, v == null || v <= 0 || (est != null && Math.round(v) === Math.round(est)) ? null : v);
+      App.render({ garderScroll: true });
+    }));
+    document.querySelectorAll('.ov-prixm2-reset').forEach(el => el.addEventListener('click', () => { Immo.setPrixM2(bienDe(el), null); App.render({ garderScroll: true }); }));
     const months = F.mois(M, 24);
     const P = months.map(mk => F.patrimoine(M, F.dateFin(mk)));
     const keys = ['liquidites', 'epargne', 'placements', 'autre'].filter(k => P.some(p => p.par[k] !== 0));
@@ -1841,7 +1919,7 @@ function pageImmobilier(M, state) {
   const today = D.today(), q = Immo.part(b), ech = b.echeancier, pret = b.pret || {};
   const valeur = Immo.valeur(b, today), crd = Immo.crd(b, today), net = valeur - crd;
   const prix = Immo.prixAchat(b), cout = Immo.coutTotal(b), surface = parseNum(b.surface);
-  const estim = [...b.estimations].reverse().find(e => e.date <= today) || b.estimations[0];
+  const estim = Immo.estimation(b, today), saisiM2 = Immo.prixM2Saisi(b);
   const payees = ech.filter(e => e.date <= today), prochaine = ech.find(e => e.date > today), fin = ech[ech.length - 1];
   const somme = (l, k) => l.reduce((s, e) => s + e[k], 0);
   const montant = parseNum(pret.montant) || 0, totInt = somme(ech, 'interets'), totAss = somme(ech, 'assurance');
@@ -1893,7 +1971,9 @@ function pageImmobilier(M, state) {
           </div>
         </div>
         <div class="kpis">
-          ${UI.kpi('Valeur estimée', eur(valeur), `${estim?.min && estim?.max ? `entre ${eur(estim.min)} et ${eur(estim.max)} · ` : ''}${esc(estim?.source || '')}${estim?.date ? ` (${D.fmt(estim.date)})` : ''}`)}
+          ${UI.kpi('Valeur estimée', eur(valeur), saisiM2 != null
+            ? `prix saisi sur la vue d’ensemble : ${eur(saisiM2)}/m² × ${surface.toLocaleString('fr-FR')} m²${Immo.annexes(b) ? ` + ${eur(Immo.annexes(b))} d’annexes` : ''} · estimation du fichier ${eur(estim?.valeur)}`
+            : `${estim?.min && estim?.max ? `entre ${eur(estim.min)} et ${eur(estim.max)} · ` : ''}${esc(estim?.source || '')}${estim?.date ? ` (${D.fmt(estim.date)})` : ''}${surface ? ` · ${eur(valeur / surface)}/m²` : ''}`)}
           ${UI.kpi('Capital restant dû', eur(crd), `${pct(montant ? capRemb / montant : null)} remboursé · fin ${fin ? D.fmt(fin.date) : '—'}`)}
           ${UI.kpi('Plus-value latente', UI.delta(pv), `vs prix d’achat (${eur(prix)}) · ${UI.delta(valeur - cout)} vs coût total`)}
         </div>
@@ -1935,7 +2015,7 @@ function pageImmobilier(M, state) {
         <thead><tr><th>Année</th><th class="num">Échéances</th><th class="num">Capital</th><th class="num">Intérêts</th><th class="num">Assurance</th><th class="num">Restant dû fin d’année</th></tr></thead>
         <tbody>${rowsAn}</tbody>
         <tfoot><tr><td>Total</td><td class="num">${ech.length}</td><td class="num">${eur(somme(ech, 'capital'))}</td><td class="num">${eur(totInt)}</td><td class="num">${eur(totAss)}</td><td></td></tr></tfoot></table></div>
-        <p class="small muted">Calculé à partir de l’offre de prêt (mensualités constantes, intérêts arrondis au centime) ; ${payees.length} échéance${payees.length > 1 ? 's' : ''} payée${payees.length > 1 ? 's' : ''} au ${D.fmt(today)} (${eur(assPayee)} d’assurance). Pour mettre à jour la valeur du bien, ajoutez une estimation datée dans <code>immobilier.json</code>.</p>`,
+        <p class="small muted">Calculé à partir de l’offre de prêt (mensualités constantes, intérêts arrondis au centime) ; ${payees.length} échéance${payees.length > 1 ? 's' : ''} payée${payees.length > 1 ? 's' : ''} au ${D.fmt(today)} (${eur(assPayee)} d’assurance). Pour mettre à jour la valeur du bien, changez le prix au m² sur la vue d’ensemble ou ajoutez une estimation datée dans <code>immobilier.json</code>.</p>`,
         { sub: 'Prêt et assurance des deux emprunteurs, par année civile', cls: 'span-12' })}
     </div>`;
 
@@ -2326,8 +2406,7 @@ function recommandations(M) {
   const compte = id => M.comptes.find(c => c.id === id);
   const valeur = id => compte(id) && F.ouvert(compte(id), today) ? F.valeur(M, id, today) : 0;
   const m12 = mois(12), m6 = mois(6), m3 = mois(3);
-  const P12 = m12.map(m => F.pnl(V, m)), P6 = P12.slice(-6), P3 = P12.slice(-3);
-  const capital = p => -(p.parCat.get(normKey('Capital crédit immobilier')) || 0);
+  const P12 = m12.map(m => F.pnl(V, m));
   const depCat = (cat, ms) => ms.map(m => F.depenses(V, m).parCat.get(normKey(cat))?.montant || 0);
   const budget = F.budget(V, cm);
   const revenus12 = moy(P12.map(p => p.revenus));
@@ -2335,10 +2414,9 @@ function recommandations(M) {
   const R = reperesConseils(M);
 
   // 1. Épargne de précaution : livrets et fonds monétaire, rapportés aux sorties mensuelles (charges + capital du crédit)
-  const dispo = M.comptes.filter(c => F.classe(c) === 'epargne' && F.ouvert(c, today)).reduce((s, c) => s + F.valeur(M, c.id, today) * c.quotePart, 0);
-  const besoin = moy(P6.map(p => p.charges)) + moy(P3.map(capital));
-  if (besoin > 0) {
-    const n = dispo / besoin, cible = 6 * besoin, manque = Math.max(0, cible - dispo);
+  // (même calcul que les points d'attention de la vue d'ensemble : epargnePrecaution)
+  const { dispo, besoin, cible, manque, mois: n } = epargnePrecaution(M, V);
+  if (n != null) {
     const placeA = Math.max(0, PLAFONDS_LIVRETS['livret-a'] - valeur('livret-a'));
     const pleins = Object.keys(PLAFONDS_LIVRETS).filter(id => valeur(id) >= PLAFONDS_LIVRETS[id] - 1).map(id => compte(id).nom);
     ajout(n < 6 ? 'haute' : 'basse', 'Sécurité',
@@ -2382,8 +2460,7 @@ function recommandations(M) {
   }
 
   // 5. Taux d'épargne
-  const taux = P => { const r = P.reduce((s, p) => s + p.revenus, 0); return r > 0 ? P.reduce((s, p) => s + p.resultat, 0) / r : null; };
-  const t12 = taux(P12), t6 = taux(P6);
+  const t12 = tauxEpargne(V, 12), t6 = tauxEpargne(V, 6);
   if (t12 != null) ajout(t6 != null && t6 < 0.15 ? 'haute' : t6 != null && t6 < 0.2 ? 'moyenne' : 'basse', 'Budget', `Taux d’épargne : ${pct(t6)} sur 6 mois, ${pct(t12)} sur 12 mois`,
     `Revenus moins charges nettes (compte joint à votre part), capital du crédit compté en épargne. Les 12 mois comprennent la prime de décembre.`,
     t6 >= 0.2 ? `Au-dessus du repère courant de 20 %. Pour qu’il se retrouve sur les comptes d’épargne, automatisez les virements le jour du salaire plutôt que d’épargner ce qui reste en fin de mois.` : `Sous le repère courant de 20 % : les pistes « postes variables » et « budget non consommé » sont les leviers.`, '#depenses');
