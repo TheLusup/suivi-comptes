@@ -93,7 +93,8 @@ code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-
 }
 /* Centré tant que tout tient ; sinon défile depuis le premier onglet (marges auto plutôt que justify-content: center) */
 .tabs { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.tabs > a:first-child { margin-left: auto; } .tabs > a:last-child { margin-right: auto; }
+.tabs > a:first-child { margin-left: auto; } .tabs > a:last-of-type { margin-right: auto; }
+.t-plus, .tabs .t-c { display: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tabs a {
   display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; white-space: nowrap;
@@ -349,9 +350,17 @@ tr.abo-inactif td { opacity: .6; }
   .tabs a[aria-current="page"] svg { background: var(--accent-soft); }
   .tabs a span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .tabs svg { display: block; width: 34px; height: 30px; padding: 5px 8px; }
-  .tools { margin: 0; }
-  .tool-btns { flex-direction: column; gap: 4px; }
-  .icon-btn { width: 30px; height: 30px; font-size: 14px; }
+  /* 4 onglets principaux + « Plus » ; le reste (et recharger / thème) passe dans le panneau */
+  .tabs a.r-plus, .tools, .tabs .t-l { display: none; }
+  .tabs .t-c { display: inline; }
+  .t-plus {
+    display: flex; flex: 1 1 0; min-width: 0; flex-direction: column; align-items: center; gap: 2px; padding: 2px 1px;
+    background: none; border: 0; border-radius: 14px; font: inherit; font-size: 9.5px; font-weight: 600; line-height: 1.2; color: var(--text-2); cursor: pointer;
+  }
+  .t-plus svg { display: block; width: 34px; height: 30px; padding: 5px 8px; border-radius: 14px; fill: currentColor; }
+  .t-plus.on { color: var(--accent); }
+  .t-plus.on svg { background: var(--accent-soft); }
+  .tabs a, .t-plus { font-size: 10.5px; }
   main { padding: 18px 16px 96px; }
   h1 { font-size: 28px; }
   .hero-value { font-size: 38px; }
@@ -514,6 +523,35 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .repli > summary .chevron { transition: transform .25s var(--ease-out); }
 tbody tr { transition: background-color .15s; }
 
+/* Panneau « Plus » (téléphone) : feuille qui monte du bas */
+.sheet {
+  position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; max-width: none; max-height: 80vh; overflow-y: auto;
+  padding: 8px 16px calc(18px + env(safe-area-inset-bottom)); border: 0; border-radius: 24px 24px 0 0;
+  background: var(--surface); color: var(--text); box-shadow: 0 -12px 40px -12px rgba(30, 20, 80, .35);
+}
+.sheet[open] { animation: feuille-monte .32s var(--ease-out) both; }
+.sheet::backdrop { background: rgba(20, 14, 50, .38); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); animation: apparait .25s ease both; }
+@keyframes feuille-monte { from { transform: translateY(100%); } to { transform: none; } }
+.sheet-poignee { width: 40px; height: 4px; border-radius: 4px; background: var(--border); margin: 0 auto 12px; }
+.sheet h2 { font-size: 17px; color: var(--text); margin: 0 4px 12px; }
+.plus-liste { display: grid; gap: 8px; }
+.plus-l {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px; border: 0; border-radius: 18px;
+  background: var(--surface-2); color: var(--text); font: inherit; text-align: left; text-decoration: none; cursor: pointer;
+  transition: transform .15s var(--ease-out), background-color .15s;
+}
+.plus-l:active { transform: scale(.98); }
+.plus-l.on { box-shadow: inset 0 0 0 2px var(--accent); }
+.plus-l > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.plus-l small { color: var(--muted); font-size: 12.5px; }
+.plus-i {
+  width: 44px; height: 44px; flex: none; border-radius: 14px; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent); font-style: normal; font-size: 20px;
+}
+.plus-i svg { width: 22px; height: 22px; fill: currentColor; }
+.plus-i svg .cut { fill: none; stroke: var(--accent-soft); stroke-width: 2.2; }
+.plus-chev { color: var(--muted); font-size: 20px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
@@ -527,9 +565,9 @@ tbody tr { transition: background-color .15s; }
     <nav class="tabs" aria-label="Pages">
       <a href="#overview" data-route="overview">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5.5v-6h-5v6H4a1 1 0 0 1-1-1z"/></svg>
-        <span>Vue d'ensemble</span>
+        <span class="t-l">Vue d'ensemble</span><span class="t-c">Accueil</span>
       </a>
-      <a href="#recommandations" data-route="recommandations">
+      <a href="#recommandations" data-route="recommandations" class="r-plus" data-desc="Pistes d'optimisation de ton budget">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21h6v-1.5H9zM12 2.5a6.5 6.5 0 0 0-3.8 11.8c.5.4.8 1 .8 1.6V18h6v-2.1c0-.6.3-1.2.8-1.6A6.5 6.5 0 0 0 12 2.5z"/></svg>
         <span>Conseils</span>
       </a>
@@ -541,7 +579,7 @@ tbody tr { transition: background-color .15s; }
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="4" height="9" rx="1.5"/><rect x="10" y="4" width="4" height="16" rx="1.5"/><rect x="16" y="8" width="4" height="12" rx="1.5"/></svg>
         <span>Épargne</span>
       </a>
-      <a href="#immobilier" data-route="immobilier">
+      <a href="#immobilier" data-route="immobilier" class="r-plus" data-desc="Valeur du bien, prix au m², crédit">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V8.5L11 4v17zM13 21V9h7v12zM6.5 10h2v2h-2zm0 4h2v2h-2zm9-2h2v2h-2zm0 4h2v2h-2z"/></svg>
         <span>Immobilier</span>
       </a>
@@ -549,13 +587,18 @@ tbody tr { transition: background-color .15s; }
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 16.6 9 10.1l4 4 5.6-5.6h-3.1v-2h6.5V13h-2V9.9l-7 7-4-4-5.1 5.1zM3 19.5h18v2H3z"/></svg>
         <span>Prévisionnel</span>
       </a>
-      <a href="#locatif" data-route="locatif">
+      <a href="#locatif" data-route="locatif" class="r-plus" data-desc="Loyers, charges et rentabilité">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 7a4.5 4.5 0 1 1 3.6 4.4L10 13.5H8v2H6v2H3v-3l5.6-5.6A4.5 4.5 0 0 1 8.5 7zm4.5-1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM13 15h8v6h-8z"/></svg>
         <span>Locatif</span>
-      </a>      <a href="#parametres" data-route="parametres">
+      </a>      <a href="#parametres" data-route="parametres" class="r-plus" data-desc="Connexion GitHub, mode démo">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 20 6v5.5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z"/></svg>
         <span>Paramètres</span>
       </a>
+      <!-- Téléphone seulement : regroupe les onglets .r-plus dans un panneau -->
+      <button type="button" class="t-plus" id="btn-plus" aria-haspopup="dialog" aria-label="Plus : Conseils, Immobilier, Locatif, Paramètres">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2.3"/><circle cx="12" cy="12" r="2.3"/><circle cx="19" cy="12" r="2.3"/></svg>
+        <span>Plus</span>
+      </button>
     </nav>
     <div class="tools">
       <span id="source-pill" class="pill"></span>
@@ -566,6 +609,11 @@ tbody tr { transition: background-color .15s; }
     </div>
   </aside>
   <main id="view"></main>
+  <dialog id="plus-sheet" class="sheet" aria-labelledby="plus-titre">
+    <div class="sheet-poignee" aria-hidden="true"></div>
+    <h2 id="plus-titre">Plus</h2>
+    <nav class="plus-liste" aria-label="Autres pages"></nav>
+  </dialog>
   <script>
 'use strict';
 
@@ -3849,6 +3897,8 @@ const App = {
       view.innerHTML = `<section class="card empty-state"><h2>Aucune donnée chargée</h2><p class="muted">Renseignez votre dépôt GitHub et votre token, ou essayez le mode démo.</p><a class="btn primary" href="#parametres">Ouvrir les paramètres</a></section>`;
       return;
     }
+    // Sur téléphone, « Plus » s'allume quand la page courante est rangée dedans
+    document.getElementById('btn-plus').classList.toggle('on', !!document.querySelector(`.tabs a.r-plus[data-route="${route}"]`));
     const page = PAGES[route](this.M, this.state);
     // Animations d'arrivée sur la page (cartes en cascade, barres, montants, graphiques) ; pas lors d'un simple
     // recalcul (garderScroll) ; la classe est retirée ensuite pour que les mises à jour en direct restent immédiates
@@ -3874,8 +3924,31 @@ const App = {
     this.render();
   },
 
+  // Panneau « Plus » (téléphone) : onglets .r-plus avec un sous-titre, puis recharger et thème
+  ouvrirPlus() {
+    const sheet = document.getElementById('plus-sheet'), route = this.route();
+    const nuit = document.documentElement.dataset.theme === 'dark';
+    const ligne = (debut, fin, icone, nom, desc, on) =>
+      `${debut} class="plus-l${on ? ' on' : ''}"${on ? ' aria-current="page"' : ''}><i class="plus-i">${icone}</i><span><b>${nom}</b><small>${desc}</small></span><span class="plus-chev" aria-hidden="true">›</span>${fin}`;
+    sheet.querySelector('.plus-liste').innerHTML =
+      [...document.querySelectorAll('.tabs a.r-plus')].map(a => ligne(`<a href="${a.getAttribute('href')}"`, '</a>',
+        a.querySelector('svg').outerHTML, a.querySelector('span').textContent, a.dataset.desc, a.dataset.route === route)).join('')
+      + ligne('<button type="button" data-plus="refresh"', '</button>', '<b aria-hidden="true">↻</b>', 'Recharger les données', 'Relire le dépôt GitHub', false)
+      + ligne('<button type="button" data-plus="theme"', '</button>', '<b aria-hidden="true">◐</b>', nuit ? 'Thème clair' : 'Thème sombre', nuit ? 'Repasser en lavande' : 'Plus doux le soir', false);
+    sheet.showModal();
+  },
+
   init() {
     this.applyTheme(store.get(localStorage, THEME_KEY));
+    const sheet = document.getElementById('plus-sheet');
+    document.getElementById('btn-plus').addEventListener('click', () => this.ouvrirPlus());
+    sheet.addEventListener('click', e => {
+      const b = e.target.closest('[data-plus]');
+      // Clic sur le fond (hors du panneau), sur un lien ou sur une action : on referme
+      if (e.target === sheet || e.target.closest('a') || b) sheet.close();
+      if (b?.dataset.plus === 'refresh') this.load();
+      if (b?.dataset.plus === 'theme') this.toggleTheme();
+    });
     window.addEventListener('hashchange', () => this.render());
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.render());
     document.getElementById('btn-refresh').addEventListener('click', () => this.load());
