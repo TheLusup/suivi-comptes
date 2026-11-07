@@ -1859,7 +1859,8 @@ const INTERNE = 'Virement interne', APPORT_COTITULAIRE = 'Participation conjoint
 const quotePartCompte = (M, id) => M.comptes.find(c => c.id === id)?.quotePart ?? 1;
 // Règle du compte : la quote-part, sauf les apports du co-titulaire sur un compte partagé, qui sont à lui (0 pour vous)
 const estApport = (t, q) => q < 1 && normKey(t.categorie) === normKey(APPORT_COTITULAIRE);
-const defautMoi = (t, q) => estApport(t, q) ? 0 : Math.round(Math.abs(t.montant) * q * 100) / 100;
+// Arrondi du montant signé, comme avant les exceptions (−42,05 × 50 % → −21,02), pour garder les mêmes chiffres
+const defautMoi = (t, q) => estApport(t, q) ? 0 : Math.abs(Math.round(t.montant * q * 100) / 100);
 // Montant qui vous revient (en valeur absolue) : l'exception, bornée au montant de l'opération, sinon la règle du compte
 function partMoi(M, t, q = quotePartCompte(M, t.compte)) {
   return t.partMoi != null ? Math.min(Math.max(t.partMoi, 0), Math.abs(t.montant)) : defautMoi(t, q);
