@@ -467,6 +467,57 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   .form-row { grid-template-columns: 1fr; }
 }
 
+/* ---------- Motion design ----------
+   À l'arrivée sur une page (#view.anime, posé par App.render) : titre puis cartes en cascade (--i = rang),
+   barres et jauges qui se remplissent, montants qui défilent (compterMontants), graphiques dessinés.
+   Ensuite, des survols et transitions doux. Tout est coupé si le système demande moins d'animations. */
+:root { --ease-out: cubic-bezier(.22, 1, .36, 1); --ease-ressort: cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes monte { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes apparait { from { opacity: 0; } to { opacity: 1; } }
+@keyframes remplit-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes remplit-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes pastille-in { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes derive { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
+
+#view.anime > .page-h { animation: monte .5s var(--ease-out) both; }
+#view.anime .grid > * { animation: monte .6s var(--ease-out) both; animation-delay: calc(60ms + var(--i, 0) * 55ms); }
+#view.anime .hero .kpi, #view.anime .pv-stat { animation: monte .55s var(--ease-out) both; }
+#view.anime .hero .kpi:nth-child(2), #view.anime .pv-stat:nth-child(2) { animation-delay: 80ms; }
+#view.anime .hero .kpi:nth-child(3), #view.anime .pv-stat:nth-child(3) { animation-delay: 140ms; }
+#view.anime .hero .kpi:nth-child(4), #view.anime .pv-stat:nth-child(4) { animation-delay: 200ms; }
+#view.anime .hero .kpi:nth-child(n+5) { animation-delay: 260ms; }
+/* Barres horizontales et verticales */
+#view.anime .fill, #view.anime .cat-tuile .jauge > span, #view.anime .alloc .track > *, #view.anime .pv-flux span {
+  transform-origin: left center; animation: remplit-x .9s var(--ease-out) both; animation-delay: .25s; }
+#view.anime .pv-flux span:nth-child(2) { animation-delay: .32s; }
+#view.anime .pv-flux span:nth-child(3) { animation-delay: .39s; }
+#view.anime .pv-flux span:nth-child(4) { animation-delay: .46s; }
+#view.anime .pv-barres span { transform-origin: bottom center; animation: remplit-y .7s var(--ease-ressort) both; }
+#view.anime .pv-mois:nth-child(n) .pv-barres span { animation-delay: calc(.3s + var(--m, 0) * 40ms); }
+#view.anime .pace { animation: apparait .4s ease both; animation-delay: .9s; }
+#view.anime .attention .status, #view.anime .legende .pastille { animation: pastille-in .4s var(--ease-ressort) both; animation-delay: .35s; }
+
+/* Bandeau : le dégradé dérive lentement */
+.hero { background-size: 180% 180%; background-position: 0% 50%; animation: derive 16s ease-in-out infinite alternate; }
+#view.anime .grid > .hero { animation: monte .6s var(--ease-out) both, derive 16s ease-in-out infinite alternate; animation-delay: calc(60ms + var(--i, 0) * 55ms), 0s; }
+
+/* Survols : légère élévation des éléments cliquables ou à lire de près */
+.kpi, .cat-tuile, .support, .pv-mois, .attention, .reco, .pv-stat {
+  transition: transform .25s var(--ease-out), box-shadow .25s var(--ease-out), background-color .2s; }
+.cat-tuile:hover, .support:hover, .pv-mois:hover, .reco:hover, .attention:hover, .pv-stat:hover, .kpi:hover {
+  transform: translateY(-2px); box-shadow: 0 10px 24px -10px rgba(108, 92, 231, .35); }
+.btn, .onglet, .icon-btn, .tabs a { transition: transform .15s var(--ease-out), background-color .15s, color .15s, filter .15s; }
+.btn:active, .onglet:active, .icon-btn:active, .tabs a:active { transform: scale(.96); }
+.icon-btn#btn-refresh:hover { transform: rotate(-90deg); }
+.icon-btn#btn-refresh { transition: transform .4s var(--ease-out), background-color .15s, color .15s; }
+.fill, .pv-barres span, .cat-tuile .jauge > span { transition: width .5s var(--ease-out), height .5s var(--ease-out); }
+.repli > summary .chevron { transition: transform .25s var(--ease-out); }
+tbody tr { transition: background-color .15s; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
@@ -1281,9 +1332,15 @@ const Charts = {
     },
   },
 
+  // Animation des graphiques : seulement à l'arrivée sur une page (#view.anime), jamais en mouvement réduit
+  animation() {
+    const anime = document.getElementById('view')?.classList.contains('anime') && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return anime ? { duration: 900, easing: 'easeOutQuart' } : false;
+  },
+
   options(c, { stacked = false, legend = true } = {}) {
     return {
-      responsive: true, maintainAspectRatio: false, animation: false,
+      responsive: true, maintainAspectRatio: false, animation: this.animation(),
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: {
@@ -1352,7 +1409,7 @@ const Charts = {
       type: 'doughnut',
       data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: c.surface, borderWidth: 3, hoverOffset: 6 }] },
       options: {
-        responsive: true, maintainAspectRatio: false, animation: false, cutout: '68%',
+        responsive: true, maintainAspectRatio: false, animation: this.animation() && { ...this.animation(), animateRotate: true }, cutout: '68%',
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -3342,7 +3399,7 @@ function pagePrevisionnel(M, state) {
         const deco = e => `<span aria-hidden="true">${e}</span> `;
         const note = i === 0 ? 'reste du mois' : x.prime > 0.5 ? deco('🎁') + 'primes' : x.voyages > 0.5 ? deco('✈️') + 'voyages' : Math.abs(x.evts) >= 0.5 ? deco('📌') + 'événement' : '';
         const h = v => (v > 0.5 ? `${Math.max(3, Math.round(v / haut * 100))}%` : '0');
-        return `<div class="pv-mois ${x.disponible < -0.5 ? 'neg-mois' : note && i > 0 ? 'note-mois' : ''}">
+        return `<div class="pv-mois ${x.disponible < -0.5 ? 'neg-mois' : note && i > 0 ? 'note-mois' : ''}" style="--m:${i}">
           <div class="pv-barres" aria-hidden="true"><span class="e" style="height:${h(x.revenus)}"></span><span class="s" style="height:${h(x.depenses + credit(x))}"></span></div>
           <strong class="${x.disponible < -0.5 ? 'neg' : ''}">${eurSigned(x.disponible)}</strong>
           <span class="pv-mois-lib">${D.monthLabel(x.mk)}</span><span class="pv-mois-note">${note || '&nbsp;'}</span></div>`;
@@ -3710,6 +3767,29 @@ const store = {
   set(s, k, v) { try { v == null ? s.removeItem(k) : s.setItem(k, v); } catch { /* stockage indisponible */ } },
 };
 
+// Les grands montants défilent de 0 à leur valeur (texte seul, format et signe d'origine conservés)
+function compterMontants(root) {
+  const fmt = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+  root.querySelectorAll('.hero-value, .hero .kpi-value, .pv-stat strong, .kpi-value').forEach(el => {
+    // Montants en euros entiers seulement (pas les dates, pourcentages ou centimes)
+    if (el.children.length || !el.textContent.includes('€')) return;
+    const txt = el.textContent, m = txt.match(/\d[\d\s  ]*\d|\d/);
+    if (!m || /^,\d/.test(txt.slice(m.index + m[0].length))) return;
+    const cible = Number(m[0].replace(/\D/g, ''));
+    if (!(cible >= 100)) return;
+    const avant = txt.slice(0, m.index), apres = txt.slice(m.index + m[0].length), t0 = performance.now(), duree = 900;
+    let ecrit = txt;
+    const pas = t => {
+      // Le texte a été remplacé entre-temps (recalcul) : on n'y touche plus
+      if (!el.isConnected || el.textContent !== ecrit) return;
+      const p = Math.min(1, (t - t0) / duree), e = 1 - Math.pow(1 - p, 4);
+      el.textContent = ecrit = p < 1 ? avant + fmt.format(Math.round(cible * e)) + apres : txt;
+      if (p < 1) requestAnimationFrame(pas);
+    };
+    requestAnimationFrame(pas);
+  });
+}
+
 const PAGES = { overview: pageOverview, recommandations: pageRecommandations, depenses: pageDepenses, epargne: pageEpargne, immobilier: pageImmobilier, previsionnel: pagePrevisionnel, locatif: pageLocatif, parametres: pageParametres };
 
 const App = {
@@ -3770,8 +3850,15 @@ const App = {
       return;
     }
     const page = PAGES[route](this.M, this.state);
+    // Animations d'arrivée sur la page (cartes en cascade, barres, montants, graphiques) ; pas lors d'un simple
+    // recalcul (garderScroll) ; la classe est retirée ensuite pour que les mises à jour en direct restent immédiates
+    const anime = !garderScroll && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    clearTimeout(this._finAnime);
+    view.classList.toggle('anime', anime);
     view.innerHTML = page.html;
+    if (anime) view.querySelectorAll('.grid > *').forEach((el, i) => el.style.setProperty('--i', Math.min(i, 10)));
     if (page.after) page.after();
+    if (anime) { compterMontants(view); this._finAnime = setTimeout(() => view.classList.remove('anime'), 1600); }
     window.scrollTo(0, garderScroll ? y : 0);
   },
 
