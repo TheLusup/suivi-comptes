@@ -552,6 +552,34 @@ tbody tr { transition: background-color .15s; }
 .plus-i svg .cut { fill: none; stroke: var(--accent-soft); stroke-width: 2.2; }
 .plus-chev { color: var(--muted); font-size: 20px; }
 
+/* Répartition d'une opération (toi / co-titulaire) */
+.op-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px; }
+.part-btn {
+  font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1.3; padding: 2px 9px; border-radius: 999px; cursor: pointer;
+  border: 1px dashed var(--border); background: none; color: var(--muted); white-space: nowrap;
+  transition: background-color .15s, color .15s, border-color .15s;
+}
+.part-btn:hover { color: var(--accent); border-color: var(--accent); }
+.part-btn.exception { border: 0; background: var(--accent-soft); color: var(--accent); }
+.part-sheet h2 { margin-bottom: 4px; }
+.part-op { margin: 0 4px 14px; overflow-wrap: anywhere; }
+.part-rapides { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.part-rapides .btn { flex: 1 1 auto; }
+.part-champs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.part-champ { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+.part-saisie { position: relative; }
+.part-saisie input { width: 100%; padding-right: 26px; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.part-saisie i { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-style: normal; color: var(--muted); }
+#part-err:empty { display: none; }
+.part-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.part-actions .ghost { margin-right: auto; }
+@media (max-width: 760px) { .part-actions .ghost { flex-basis: 100%; order: 2; margin: 0; } }
+/* Sur grand écran, la fenêtre de répartition est centrée */
+@media (min-width: 761px) {
+  .sheet.part-sheet { inset: 0; margin: auto; width: min(440px, calc(100% - 32px)); height: fit-content; border-radius: 24px; padding-bottom: 18px; }
+  .part-sheet .sheet-poignee { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
@@ -837,6 +865,8 @@ function buildModel(raw, source) {
     abonnements: Array.isArray(b.abonnements) ? b.abonnements : [],
     // Noms de prestataires et repères propres au foyer utilisés par la page Conseils (gardés hors du code publié)
     conseils: b.conseils || {},
+    // Prénom du co-titulaire affiché dans la répartition des opérations (gardé hors du code publié)
+    conjoint: b.conjoint || '',
   };
 
   const positions = [];
@@ -881,6 +911,14 @@ function buildModel(raw, source) {
     });
   });
   transactions.sort((a, b) => a.date.localeCompare(b.date));
+  // Clé des exceptions de répartition : l'id complété du compte, et du rang pour les opérations identiques
+  // (même date, libellé et montant sur le même compte), afin qu'une exception ne touche qu'une seule opération
+  const vus = new Map();
+  transactions.forEach(t => {
+    const k = t.id + '|' + t.compte, n = vus.get(k) || 0;
+    vus.set(k, n + 1);
+    t.idPart = n ? k + '#' + (n + 1) : k;
+  });
 
   const M = { comptes, soldes, transactions, budget, positions, operations, immobilier, source, chargeLe: new Date(), warnings, parCompte: {}, parLigne: {},
     previsionDepot: raw.prevision || null };
@@ -892,29 +930,44 @@ function buildModel(raw, source) {
   return M;
 }
 
-/* ---------- Corrections de catégories ----------
-   categories.json (dépôt) : { "libelles": { clé de libellé: catégorie }, "operations": { id: catégorie } }
+/* ---------- Corrections de catégories et de répartition ----------
+   categories.json (dépôt) : { "libelles": { clé de libellé: catégorie }, "operations": { id: catégorie },
+   "parts": { idPart (id|compte, puis #rang si doublon): montant qui vous revient, en euros, positif } }
    Les corrections faites dans la page sont gardées dans ce navigateur tant qu'elles ne sont pas
-   enregistrées dans le dépôt. Priorité : opération > libellé > catégorie de transactions.csv. */
+   enregistrées dans le dépôt. Priorité : opération > libellé > catégorie de transactions.csv.
+   Répartition : sans exception, une opération vous revient selon la quote-part de son compte (100 %, joint 50 %) ;
+   une exception fixe le montant qui vous revient. Une exception locale à null annule celle du dépôt. */
 const CORR_KEY = 'suivi-comptes.corrections';
 const Corrections = {
   // Clé de libellé : sans chiffres ni ponctuation, pour regrouper « BOLT.EU/O/250110 » et « BOLT.EU/O/250128 »
   cle: libelle => normKey(libelle).replace(/\d+/g, ' ').replace(/[^a-z&']+/g, ' ').replace(/\s+/g, ' ').trim(),
-  nettoyer: c => ({ libelles: { ...(c?.libelles || {}) }, operations: { ...(c?.operations || {}) } }),
+  nettoyer: c => ({ libelles: { ...(c?.libelles || {}) }, operations: { ...(c?.operations || {}) }, parts: { ...(c?.parts || {}) } }),
   locales() { try { return Corrections.nettoyer(JSON.parse(localStorage.getItem(CORR_KEY) || 'null')); } catch { return Corrections.nettoyer(null); } },
   sauverLocales(c) { try { localStorage.setItem(CORR_KEY, JSON.stringify(c)); } catch { /* stockage indisponible */ } },
   effacerLocales() { try { localStorage.removeItem(CORR_KEY); } catch { /* stockage indisponible */ } },
-  nbLocales() { const c = Corrections.locales(); return Object.keys(c.libelles).length + Object.keys(c.operations).length; },
+  nbLocales() { const c = Corrections.locales(); return Object.keys(c.libelles).length + Object.keys(c.operations).length + Object.keys(c.parts).length; },
   fusion(M) {
     const l = Corrections.locales(), d = M.correctionsDepot || Corrections.nettoyer(null);
-    return { libelles: { ...d.libelles, ...l.libelles }, operations: { ...d.operations, ...l.operations } };
+    // Montants lisibles et positifs seulement, convertis en nombres (une valeur locale null annule celle du dépôt)
+    const parts = Object.fromEntries(Object.entries({ ...d.parts, ...l.parts }).map(([k, v]) => [k, parseNum(v)]).filter(([, v]) => v != null && v >= 0));
+    return { libelles: { ...d.libelles, ...l.libelles }, operations: { ...d.operations, ...l.operations }, parts };
   },
   appliquer(M) {
     delete M._pnlPlan;   // le plan du P&L dépend des catégories en usage
     const c = Corrections.fusion(M);
     M.transactions.forEach(t => {
       t.categorie = c.operations[t.id] || c.libelles[Corrections.cle(t.libelle)] || t.categorieOrigine;
+      t.partMoi = c.parts[t.idPart] ?? null;
     });
+  },
+  // Exception de répartition d'une opération : montant qui vous revient (null : retour à la règle du compte).
+  // Une valeur identique à celle du dépôt n'est pas gardée comme correction locale.
+  changerPart(M, t, moi) {
+    const l = Corrections.locales(), dep = parseNum(M.correctionsDepot.parts[t.idPart]), k = t.idPart;
+    const v = moi == null ? null : Math.round(moi * 100) / 100;
+    if (v === dep || (v == null && dep == null)) delete l.parts[k]; else l.parts[k] = v;
+    Corrections.sauverLocales(l);
+    Corrections.appliquer(M);
   },
   // Change la catégorie d'une opération, ou de toutes celles qui ont le même libellé
   changer(M, t, categorie, toutLeLibelle) {
@@ -936,7 +989,7 @@ const Corrections = {
   // Contenu de categories.json une fois les corrections locales fusionnées
   texte(M) {
     const c = Corrections.fusion(M), tri = o => Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
-    return JSON.stringify({ libelles: tri(c.libelles), operations: tri(c.operations) }, null, 2) + '\n';
+    return JSON.stringify({ libelles: tri(c.libelles), operations: tri(c.operations), parts: tri(c.parts) }, null, 2) + '\n';
   },
 };
 
@@ -1800,16 +1853,28 @@ function pageOverview(M) {
    ou tous les comptes, où les virements entre vos comptes sont neutralisés (retirés des deux côtés) et où
    un compte partagé (quotePart < 1, ex. compte joint) ne compte que pour votre part : ses opérations sont
    réduites à cette part, et les apports du co-titulaire (« Participation conjoint »), qui financent la sienne,
-   sont retirés. */
+   sont retirés. Une exception de répartition (Corrections.changerPart) fixe en euros le montant qui vous revient,
+   sur n'importe quel compte ; elle prime sur la quote-part du compte. */
 const INTERNE = 'Virement interne', APPORT_COTITULAIRE = 'Participation conjoint';
+const quotePartCompte = (M, id) => M.comptes.find(c => c.id === id)?.quotePart ?? 1;
+// Règle du compte : la quote-part, sauf les apports du co-titulaire sur un compte partagé, qui sont à lui (0 pour vous)
+const estApport = (t, q) => q < 1 && normKey(t.categorie) === normKey(APPORT_COTITULAIRE);
+const defautMoi = (t, q) => estApport(t, q) ? 0 : Math.round(Math.abs(t.montant) * q * 100) / 100;
+// Montant qui vous revient (en valeur absolue) : l'exception, bornée au montant de l'opération, sinon la règle du compte
+function partMoi(M, t, q = quotePartCompte(M, t.compte)) {
+  return t.partMoi != null ? Math.min(Math.max(t.partMoi, 0), Math.abs(t.montant)) : defautMoi(t, q);
+}
 function opsVotrePart(M) {
-  const parts = new Map(M.comptes.filter(c => c.quotePart < 1).map(c => [c.id, c.quotePart]));
+  const parts = new Map(M.comptes.map(c => [c.id, c.quotePart]));
   return M.transactions.flatMap(t => {
-    const q = parts.get(t.compte);
-    if (q == null) return [t];
-    if (normKey(t.categorie) === normKey(APPORT_COTITULAIRE)) return [];
+    const q = parts.get(t.compte) ?? 1;
+    if (t.partMoi == null) {
+      if (q >= 1) return [t];
+      if (estApport(t, q)) return [];
+    }
     // Copie à votre part ; l'id et la catégorie d'origine restent ceux de l'opération (corrections de catégorie)
-    return [Object.assign(Object.create(t), { montant: Math.round(t.montant * q * 100) / 100, part: q })];
+    const moi = partMoi(M, t, q);
+    return [Object.assign(Object.create(t), { montant: t.montant < 0 && moi ? -moi : moi, total: t.montant, brut: t })];
   });
 }
 // Comptes qui ont des opérations (comptes courants), et leurs banques
@@ -1937,11 +2002,21 @@ function pageDepenses(Mtout, state) {
   const optionsCat = c => toutesCats.map(x => `<option ${x === c ? 'selected' : ''}>${esc(x)}</option>`).join('') + '<option value="__nouvelle">+ Nouvelle catégorie…</option>';
   const liste = (sel ? opsMois.filter(t => normKey(t.categorie) === sel) : opsMois).sort((a, b) => b.date.localeCompare(a.date) || a.montant - b.montant);
   const labelSel = sel ? (rows.find(r => r.key === sel)?.label || autres.get(sel)?.label || sel) : null;
+  // Répartition de chaque opération entre vous et le co-titulaire (prénom lu dans budget.json, hors code publié)
+  const nomConj = esc(Mtout.budget.conjoint || 'Conjoint');
+  const libRegle = (t, q) => estApport(t, q) ? `100 % ${nomConj}` : q === 0.5 ? '50/50' : q < 1 ? `${pct(q)} toi · ${pct(1 - q)} ${nomConj}` : '100 % toi';
+  const pastillePart = v => {
+    // Les virements entre vos comptes sont neutralisés : une répartition n'y changerait rien
+    if (normKey(v.categorie) === normKey(INTERNE)) return '';
+    const t = v.brut || v, q = quotePartCompte(Mtout, t.compte), moi = partMoi(Mtout, t, q), elle = Math.round((Math.abs(t.montant) - moi) * 100) / 100;
+    const [cls, txt] = t.partMoi != null ? ['exception', `toi ${eur(moi, true)} · ${nomConj} ${eur(elle, true)}`] : ['defaut', libRegle(t, q)];
+    return `<button type="button" class="part-btn ${cls}" data-part="${esc(t.idPart)}" title="Changer la répartition de cette opération">${txt}</button>`;
+  };
   const lignesOps = liste.map(t => `
     <tr><td class="muted nowrap">${D.fmt(t.date)}</td>
-      <td><span class="pastille" style="background:${couleur(normKey(t.categorie))}"></span> ${esc(t.libelle)}${t.categorie !== t.categorieOrigine ? ` <span class="tag" title="Catégorie d’origine : ${esc(t.categorieOrigine)}">corrigé</span>` : ''}${t.part ? ` <span class="tag" title="Compte partagé : montant total ${eur(t.montant / t.part, true)}">votre part ${pct(t.part)}</span>` : ''}
-        ${parBanque && M.idsBanque.length < 2 ? '' : `<div class="muted small">${esc(nomCompte.get(t.compte) || t.compte)}</div>`}</td>
-      <td class="num nowrap ${t.montant > 0 ? 'pos' : ''}">${eurSigned(t.montant, true)}</td>
+      <td><span class="pastille" style="background:${couleur(normKey(t.categorie))}"></span> ${esc(t.libelle)}${t.categorie !== t.categorieOrigine ? ` <span class="tag" title="Catégorie d’origine : ${esc(t.categorieOrigine)}">corrigé</span>` : ''}
+        <div class="muted small op-meta">${parBanque && M.idsBanque.length < 2 ? '' : `<span>${esc(nomCompte.get(t.compte) || t.compte)}</span>`}${pastillePart(t)}</div></td>
+      <td class="num nowrap ${t.montant > 0 ? 'pos' : ''}">${eurSigned(t.montant, true)}${t.total != null && t.total !== t.montant ? `<div class="muted small">sur ${eur(Math.abs(t.total), true)}</div>` : ''}</td>
       <td><label class="select small-select"><span class="sr">Catégorie</span><select class="sel-cat" data-id="${esc(t.id)}">${optionsCat(t.categorie)}</select></label></td></tr>`).join('');
   const nbLoc = Corrections.nbLocales();
   const barreCorr = `<div class="corr-bar">
@@ -2013,7 +2088,8 @@ function pageDepenses(Mtout, state) {
         <tbody>${histRows}</tbody>
         <tfoot><tr><th scope="row">Total</th>${histTotals}</tr></tfoot></table></div>
         ${parBanque ? '' : '<p class="small muted"><span class="status critical">▲</span> montant supérieur au budget de la catégorie</p>'}`, { sub: '6 mois jusqu’au mois choisi', state })}
-    </div>`;
+    </div>
+    <dialog id="part-sheet" class="sheet part-sheet" aria-labelledby="part-titre"></dialog>`;
 
   return { html, after() {
     document.getElementById('sel-mois').addEventListener('change', e => { state.mois = e.target.value; App.render({ garderScroll: true }); });
@@ -2031,6 +2107,57 @@ function pageDepenses(Mtout, state) {
 
     // Changement de catégorie
     const parId = new Map(Mtout.transactions.map(t => [t.id, t]));
+
+    // Répartition d'une opération : montant pour vous et pour le co-titulaire, en euros
+    const dlg = document.getElementById('part-sheet'), r2 = x => Math.round(x * 100) / 100;
+    const ouvrirPart = t => {
+      const total = Math.abs(t.montant), q = quotePartCompte(Mtout, t.compte), defaut = defautMoi(t, q), moi0 = partMoi(Mtout, t, q);
+      const champ = (id, label, v) => `<label class="part-champ"><span>${label}</span><span class="part-saisie"><input id="${id}" type="text" inputmode="decimal" autocomplete="off" value="${String(v).replace('.', ',')}"><i>€</i></span></label>`;
+      dlg.innerHTML = `<div class="sheet-poignee" aria-hidden="true"></div>
+        <h2 id="part-titre">Répartition</h2>
+        <p class="small muted part-op">${esc(t.libelle)} · ${D.fmt(t.date)} · <strong>${eur(total, true)}</strong></p>
+        <div class="part-rapides">
+          <button type="button" class="btn small" data-r="1">100 % toi</button>
+          <button type="button" class="btn small" data-r="0.5">50 / 50</button>
+          <button type="button" class="btn small" data-r="0">100 % ${nomConj}</button>
+        </div>
+        <div class="part-champs">${champ('part-moi', 'Toi', moi0)}${champ('part-elle', nomConj, r2(total - moi0))}</div>
+        <p class="small neg" id="part-err" role="alert"></p>
+        <p class="small muted">Règle du compte : ${libRegle(t, q)} (${eur(defaut, true)} pour toi).</p>
+        <div class="part-actions">
+          ${t.partMoi != null ? '<button type="button" class="btn small ghost" id="part-defaut">Revenir à la règle du compte</button>' : ''}
+          <button type="button" class="btn small" id="part-annuler">Annuler</button>
+          <button type="button" class="btn small primary" id="part-ok">Valider</button>
+        </div>`;
+      const moi = dlg.querySelector('#part-moi'), elle = dlg.querySelector('#part-elle'), err = dlg.querySelector('#part-err');
+      const fmt = v => String(r2(v)).replace('.', ',');
+      // Saisir un côté calcule l'autre ; un montant illisible laisse l'autre champ tel quel
+      moi.addEventListener('input', () => { const v = parseNum(moi.value); if (v != null) elle.value = fmt(total - v); err.textContent = ''; });
+      elle.addEventListener('input', () => { const v = parseNum(elle.value); if (v != null) moi.value = fmt(total - v); err.textContent = ''; });
+      // Raccourcis : votre part arrondie au centime, l'autre part en est le complément exact (50/50 de 864,99 → 432,50 / 432,49)
+      dlg.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => { const m = r2(total * Number(b.dataset.r)); moi.value = fmt(m); elle.value = fmt(total - m); err.textContent = ''; }));
+      const fini = () => { dlg.close(); state.corrMsg = null; App.render({ garderScroll: true }); };
+      dlg.querySelector('#part-annuler').addEventListener('click', () => dlg.close());
+      dlg.querySelector('#part-defaut')?.addEventListener('click', () => { Corrections.changerPart(Mtout, t, null); fini(); });
+      dlg.querySelector('#part-ok').addEventListener('click', () => {
+        const v = parseNum(moi.value), w = parseNum(elle.value);
+        if (v == null || w == null || v < 0 || w < 0 || Math.abs(v + w - total) > 0.005) {
+          err.textContent = `Les deux montants doivent être positifs et faire ${eur(total, true)} au total.`; return;
+        }
+        // Un montant égal à la règle du compte n'est pas une exception
+        Corrections.changerPart(Mtout, t, Math.abs(v - defaut) < 0.005 ? null : v);
+        fini();
+      });
+      dlg.showModal();
+      moi.select();
+    };
+    // Fermeture au clic sur le fond seulement (un clic dans les marges de la fenêtre la laisse ouverte)
+    dlg.addEventListener('click', e => {
+      const r = dlg.getBoundingClientRect();
+      if (e.target === dlg && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) dlg.close();
+    });
+    const parIdPart = new Map(Mtout.transactions.map(t => [t.idPart, t]));
+    document.querySelectorAll('.part-btn').forEach(b => b.addEventListener('click', () => { const t = parIdPart.get(b.dataset.part); if (t) ouvrirPart(t); }));
     document.querySelectorAll('.sel-cat').forEach(s => s.addEventListener('change', () => {
       const t = parId.get(s.dataset.id);
       let cat = s.value;
@@ -2048,7 +2175,7 @@ function pageDepenses(Mtout, state) {
       save.disabled = true; save.textContent = 'Enregistrement…';
       try {
         const texte = Corrections.texte(Mtout);
-        await ghPut(App.getCfg(), 'categories.json', texte, 'Corrections de catégories');
+        await ghPut(App.getCfg(), 'categories.json', texte, 'Corrections de catégories et de répartition');
         Mtout.correctionsDepot = JSON.parse(texte);
         Corrections.effacerLocales();
         state.corrMsg = { ok: true, texte: '✓ Corrections enregistrées dans categories.json.' };
