@@ -3656,7 +3656,8 @@ function pagePrevisionnel(M, state) {
    emprunteurs) vient d'immobilier.json.
    Projet : coût total (prix, travaux, frais de notaire) moins l'apport = crédit nécessaire ; on vérifie que sa
    mensualité tient dans la capacité, puis on projette année par année les loyers (revalorisés, nets de la vacance),
-   les charges (indexées) et les échéances, jusqu'à la revente à la fin de la détention. Le TRI porte sur les fonds
+   les charges (indexées) et les échéances, jusqu'à la revente à la fin de la détention (valeur de départ : prix
+   d'achat + travaux, revalorisée chaque année ; les frais de notaire ne sont pas récupérés). Le TRI porte sur les fonds
    propres : l'apport au départ, les cash-flows chaque année, puis le prix de revente moins le capital restant dû.
    Montants avant impôt. Les hypothèses saisies (dont le salaire du conjoint) restent dans ce navigateur : elles ne
    sont ni dans la page publiée ni dans le dépôt. */
@@ -3720,7 +3721,8 @@ function projectionLocatif(v) {
     }
     const loyers = v.loyer * 12 * Math.pow(1 + v.revalLoyer / 100, a - 1) * (1 - v.vacance / 12);
     const charges = v.chargesLoc * 12 * Math.pow(1 + v.revalCharges / 100, a - 1);
-    const valeur = v.prix * Math.pow(1 + v.revalBien / 100, a);
+    // Les travaux se retrouvent dans le prix de revente : la valorisation porte sur prix d'achat + travaux (hors notaire)
+    const valeur = (v.prix + v.travaux) * Math.pow(1 + v.revalBien / 100, a);
     const cashflow = loyers - charges - credits;
     cumul += cashflow;
     annees.push({ a, loyers, charges, credits, interets, capital, crd: Math.max(0, crd), cashflow, cumul, valeur });
@@ -3807,7 +3809,7 @@ function pageLocatif(M, state) {
         </div>
         <div class="form-row">
           ${champ('revalCharges', 'Hausse des charges', 'Par an.', { pas: 0.25, unite: '%' })}
-          ${champ('revalBien', 'Valorisation du bien', 'Par an, pour la revente.', { pas: 0.25, unite: '%' })}
+          ${champ('revalBien', 'Valorisation du bien', 'Par an, sur prix + travaux, pour la revente.', { pas: 0.25, unite: '%' })}
         </div>
         <div class="form-row">
           ${champ('detention', 'Durée de détention', 'Revente à la fin, capital restant dû remboursé.', { unite: 'ans' })}
